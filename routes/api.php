@@ -16,5 +16,8 @@ Route::post('/login', [AuthController::class, 'Login']);
 Route::middleware( ['auth:api'])->group(function () {
 
 Route::post('/register_business', [BusinessController::class, 'createBusiness']);
+Route::post('/update_business', [BusinessController::class, 'updateBusiness']);
+Route::get('/get_business', [BusinessController::class, 'getUserBusiness']);
+Route::get('/get_business/sales', [BusinessController::class, 'getUserBusinessWithSales']);
 
 });

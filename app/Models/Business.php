@@ -39,6 +39,7 @@ class Business extends Model
     {
         return $this->hasMany(Sale::class);
     }
+ 
     public function PriceHistory(): HasMany
     {
         return $this->hasMany(Price::class);

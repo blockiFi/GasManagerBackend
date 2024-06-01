@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\Sale;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -15,9 +15,19 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        Sale::create([
+            'business_id' => '4',
+            'location_id' => '2',
+            'dispenser_id' => '2',
+            'opening_sales' => '2',
+            'closing_sales' => '2',
+            'closing_kg' => '2',
+            'opening_kg' => '2',
+            'price_id' => '2',
+            'kg_quantity' => '2',
+            'amount' => '2',
+            'sales_date' => '2',
+            'uploaded_by' => now()
         ]);
     }
 }
