@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Passport\HasApiTokens;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 class User extends Authenticatable
 {
     use  HasApiTokens, HasFactory, Notifiable;
@@ -46,7 +46,7 @@ class User extends Authenticatable
         ];
     }
 
-    public function Business(): BelongsTo 
+    public function Business(): HasOne 
     {
         return $this->hasOne(Business_User::class);
 
