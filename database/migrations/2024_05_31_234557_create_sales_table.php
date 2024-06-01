@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('closing_sales');
             $table->string('opening_kg');
             $table->string('closing_kg');
-            $table->string('price');
+            $table->string('price_id');
             $table->string('kg_quantity');
             $table->string('amount');
             $table->string('sales_date');
