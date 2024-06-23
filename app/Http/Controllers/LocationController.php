@@ -8,18 +8,35 @@ use Validator;
 use App\Models\Business;
 use App\Models\Location;
 use App\Models\Business_User;
-class LocationController extends Controller
-{
-    //
-    public function getBusinessLocations(){
 
-        
-         $response['data'] = $this->getLocations();
+
+class LocationController extends Controller 
+{
+
+
+
+
+
+
+    public function getBusinessLocations(Request $request){
+        $validator = Validator::make($request->all(), [
+            "business_id" => "required|exists:businesses,id"
+      ]);
+
+      if ($validator->fails()) {
+
+           
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+            return response()->json($response ,400);
+      }
+         $response['data'] = $this->getLocations($request->business_id);
            return response()->json($response ,200); 
     }
 
     public function addBusinessLocation(Request $request){
         $validator = Validator::make($request->all(), [
+            'business_id' => 'required|exists:businesses,id',
             "name" =>  "required",
             'address' => 'required',
             'user_id' => 'required|exists:users,id'
@@ -33,18 +50,18 @@ class LocationController extends Controller
             return response()->json($response ,400);
       }
 
-      $business = Auth::user()->Business()->with('Business')->first()['Business'];
-      $isWithTheBusiness = Business_User::where([['business_id' , '=' , $business->id],['user_id' , '=' , $request->user_id]])->first();
+      
+      $isWithTheBusiness = Business_User::where([['business_id' , '=' , $request->business_id],['user_id' , '=' , $request->user_id]])->first();
       if($isWithTheBusiness){
         $location = new Location;
         $location->name = $request->name;
         $location->address = $request->address;
-        $location->business_id = $business->id;
+        $location->business_id = $request->business_id;
         $location->manager_id = $request->user_id;
 
         $location->save();
         
-        $response['data'] = $this->getLocations();
+        $response['data'] = $this->getLocations($request->business_id);
         $response['message'] = "Location Added Successfully";
         return response()->json($response ,200); 
       }
@@ -58,6 +75,7 @@ class LocationController extends Controller
     }
     public function updateBusinessLocation(Request $request){
         $validator = Validator::make($request->all(), [
+            "business_id" => "required|exists:businesses,id",
             "id" => "required|exists:locations",
             "name" =>  "required",
             'address' => 'required',
@@ -80,17 +98,10 @@ class LocationController extends Controller
         return response()->json($response ,200); 
 
     }
-    public function getLocations(){
-        $businessData =  Auth::user()->Business()->with(['Business' , 'Business.Locations' , 'Business.Locations.Manager'])->first()['Business'];
-        
-        if($businessData && $businessData->owner_id == Auth::user()->id){
-           
-        }
-        else{
-            $location = Location::where('manager_id' , '=' ,Auth::user()->id )->get();
-            $businessData['locations'] = $location ;
-        }
-       return $businessData;
+    public function getLocations($business_id){
+         $business = business::where('id' , $business_id)->with(['Locations' , 'Locations.Manager'])->first();
+      
+       return $business;
     }
 
 }

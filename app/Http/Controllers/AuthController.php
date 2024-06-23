@@ -64,5 +64,12 @@ class AuthController extends Controller
         }
        
         }
+
+        public function AuthError(){
+            $response['error'] = "User Not Permitted";
+            $response['code']  = "401";
+            return response()->json($response ,401);  
+        }
+        
     }
 

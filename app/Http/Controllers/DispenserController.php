@@ -51,7 +51,30 @@ class DispenserController extends Controller
     public function getDispensers($location_id){
         return Dispenser::where('location_id' , '=' , $location_id)->with(['Sales' ,'Sales.Price'])->get();
     }
+    public function UpdateDispenser(Request $request){
+        $validator = Validator::make($request->all(), [
+            "dispenser_id" => "required|exists:dispensers,id",
+            'name' => 'required'
+      ]);
 
+      if ($validator->fails()) {
+
+           
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+            return response()->json($response ,400);
+      }
+        $business = Auth::user()->Business()->with('Business')->first()['Business'];
+        $dispenser = Dispenser::find($request->dispenser_id);
+        if($dispenser->business_id == $business->id) {
+            $dispenser->name = $request->name;
+            $dispenser->save();
+            $response['message'] = 'Dispenser Updated Successfully';
+            return response()->json($response ,200);
+        }
+        $response['errors'] = ['Dispenser not business dispenser'];
+        return response()->json($response ,400);
+    }
     public function getAllBusinessDispensers(){
         $business = Auth::user()->Business()->with('Business')->first()['Business'];
         $dispensers = Dispenser::where('business_id' , '=' , $business->id)->with(['Sales' ,'Sales.Price'])->get();
