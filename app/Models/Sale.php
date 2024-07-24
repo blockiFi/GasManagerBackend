@@ -10,6 +10,18 @@ class Sale extends Model
 {
     use HasFactory;
 
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'sales_date' => 'date:Y/m/d'
+        ];
+    }
+
     public function Business(): BelongsTo 
     {
         return $this->belongsTo(Business::class);

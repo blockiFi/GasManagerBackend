@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('price_id');
             $table->string('kg_quantity');
             $table->string('amount');
+            $table->string('status');
             $table->string('sales_date');
             $table->string('uploaded_by');
             $table->timestamps();

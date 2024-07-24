@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('business_id');
             $table->string('location_id');
             $table->string('dispenser_id');
-            $table->string('quatity');
+            $table->string('quantity');
             $table->string('amount');
             $table->string('supplier_id');
             $table->string('recieved_by');

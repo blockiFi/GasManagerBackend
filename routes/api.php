@@ -11,6 +11,7 @@ use App\HTTP\Controllers\PriceController;
 use App\HTTP\Controllers\SalesController;
 use App\HTTP\Controllers\SettingsController;
 use App\HTTP\Controllers\SupplierController;
+use App\HTTP\Controllers\SupplyController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -34,6 +35,10 @@ Route::middleware( ['auth:api' ])->group(function () {
         Route::post('/business/supplier/add_business_supplier', [SupplierController::class, 'addSupplier']);
         Route::post('/business/supplier/update_business_supplier', [SupplierController::class, 'updateSupplier']);
         
+        Route::post('/business/supply/add_business_supply', [SupplyController::class, 'addSupply']);
+
+        Route::post('/business/sales/confirm_sales', [SalesController::class, 'confirmSales']);
+        
         
     });
     Route::middleware( ['businessManager'])->group(function () {
@@ -46,6 +51,13 @@ Route::middleware( ['auth:api' ])->group(function () {
         Route::post('/business/location/add_sales', [SalesController::class, 'addSales']);
         Route::post('/business/supplier/get_business_suppliers', [SupplierController::class, 'getBisinessSupliers']);
 
+        Route::post('/business/supply/get_business_supplies', [SupplyController::class, 'getSupplies']);
+        Route::post('/business/supply/confirm_business_supply', [SupplyController::class, 'confirmSupply']);
+
+        Route::post('/business/sales/upload_reciept', [SalesController::class, 'uploadReciept']);
+        Route::post('/business/sales/get_reciept', [SalesController::class, 'getSalesReceipts']);
+        
+        
         
         
     });   
@@ -62,7 +74,4 @@ Route::middleware( ['auth:api' ])->group(function () {
     Route::post('/business/settings/set_business_setting', [SettingsController::class, 'setBusinessSetting']);
     Route::post('/business/settings/get_business_setting', [SettingsController::class, 'getBusinessSetings']);
     
-    
-    
-
 });

@@ -54,7 +54,7 @@ class AuthController extends Controller
             $res['token'] = $user->createToken(name : 'gasManager')->accessToken;
             $res['user'] = $user;
             $res['message'] = "Login Successful";
-            $res['code'] = 400;
+            $res['code'] = 200;
             return response()->json($res ,200);  
         }else{
             
