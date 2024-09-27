@@ -176,6 +176,32 @@ public function getSalesReceipts(Request $request){
 }
 
 public function confirmSales(Request $request){
-    
+        $validator = Validator::make($request->all(), [
+                "business_id" => "required|exists:businesses,id",
+                "location_id" => "required|exists:locations,id",
+                "sales_id" => "required|exists:sales,id",
+        ]);
+
+        if ($validator->fails()) {
+
+            
+                $response['code'] = 400;
+                $response['errors'] = $validator->messages()->all();
+                return response()->json($response ,400);
+        } 
+  
+        $business = Business::find($request->business_id);
+        if(Auth::user()->id != $business->owner_id){
+            $response['code'] = 400;
+                $response['errors'] = ["Only Business Owner can Confirm Payment"];
+                return response()->json($response ,400);
+        }
+
+        $sales = Sale::find($request->sales_id);
+        $sales->status = "confirmed";
+        $sales->save();
+        $response['code'] = 200;
+        $response['message'] = "Sale Payment Confirmed Successfully!!!";
+        return response()->json($response ,200);
 }
 }

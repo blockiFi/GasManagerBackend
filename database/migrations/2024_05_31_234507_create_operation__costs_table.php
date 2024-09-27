@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('business_id');
             $table->string('location_id');
             $table->string('title');
+            $table->string('amount');
             $table->string('description');
             $table->string('paid_at');
             $table->string('paidby_id');

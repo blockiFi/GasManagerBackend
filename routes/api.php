@@ -26,7 +26,7 @@ Route::middleware( ['auth:api' ])->group(function () {
     Route::middleware( ['BusinessOwner'])->group(function () {
         Route::post('/register_business', [BusinessController::class, 'createBusiness']);
         Route::post('/update_business', [BusinessController::class, 'updateBusiness']);
-        Route::post('/get_business/locations', [LocationController::class, 'getBusinessLocations']);
+       
         Route::post('/business/add_location', [LocationController::class, 'addBusinessLocation']);
         Route::post('/business/update_location', [LocationController::class, 'updateBusinessLocation']);
         Route::post('/business/add_dispenser', [DispenserController::class, 'AddDispenser']);
@@ -38,18 +38,20 @@ Route::middleware( ['auth:api' ])->group(function () {
         Route::post('/business/supply/add_business_supply', [SupplyController::class, 'addSupply']);
 
         Route::post('/business/sales/confirm_sales', [SalesController::class, 'confirmSales']);
-        
+        Route::post('/business/supplier/get_business_suppliers', [SupplierController::class, 'getBisinessSupliers']);
         
     });
     Route::middleware( ['businessManager'])->group(function () {
+        
         Route::post('/get_business/operational_cost/{range?}', [OperationCostController::class, 'getOperationCost']);
+        Route::post('/get_business/operational_cost_details', [OperationCostController::class, 'getAllLocationCostSummery']);
         Route::post('/business/location/add_operational_cost', [OperationCostController::class, 'addOperationCost']);
         Route::post('/get_business/location/current_price', [PriceController::class, 'getLocationCurrentPrice']);
         Route::post('/get_business/location/price_history', [PriceController::class, 'getLocationPriceHistory']);
         Route::post('/get_business/location/sales/{dispenser?}', [SalesController::class, 'getLocationSales']);
 
         Route::post('/business/location/add_sales', [SalesController::class, 'addSales']);
-        Route::post('/business/supplier/get_business_suppliers', [SupplierController::class, 'getBisinessSupliers']);
+       
 
         Route::post('/business/supply/get_business_supplies', [SupplyController::class, 'getSupplies']);
         Route::post('/business/supply/confirm_business_supply', [SupplyController::class, 'confirmSupply']);
@@ -61,7 +63,9 @@ Route::middleware( ['auth:api' ])->group(function () {
         
         
     });   
-     
+
+    Route::post('/get_business/locations/{withDispenser?}', [LocationController::class, 'getBusinessLocations']);
+    Route::post('/business/location/with_price}', [LocationController::class, 'getBusinessLocationsWithPrice']);
     Route::get('/get_business', [BusinessController::class, 'getUserBusiness']);
     Route::get('/get_business/sales', [BusinessController::class, 'getUserBusinessWithSales']);
     Route::get('/get_business/location/dispenser/{location_id}', [DispenserController::class, 'getLocationDispensers']);

@@ -26,16 +26,16 @@ class SupplyController extends Controller
       } 
       if($location){
         if($dispenser){
-        $supplies =  Supply::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $location] , ['dispenser_id' , '=' , $dispenser]])->get();
+        $supplies =  Supply::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $location] , ['dispenser_id' , '=' , $dispenser]])->with(['Dispenser' , 'Location' , 'Supplier' , 'Reciever'] )->get();
         
         }
         else{
-        $supplies =  Supply::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $location]])->get();
+        $supplies =  Supply::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $location]])->with(['Dispenser' , 'Location' , 'Supplier' , 'Reciever'] )->get();
 
         }
       }
       else{
-        $supplies =  Supply::where('business_id' , '=' , $request->business_id)->get();
+        $supplies =  Supply::where('business_id' , '=' , $request->business_id)->with(['Dispenser' , 'Location' , 'Supplier' , 'Reciever'] )->get();
 
 
       }

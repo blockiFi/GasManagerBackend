@@ -46,7 +46,8 @@ class PriceController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
-      $prices = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] ])->get();
+      $prices = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] ])->orderBy('created_at', 'desc')
+      ->get();
       $response['data'] = $prices;
       return response()->json($response ,200); 
     }

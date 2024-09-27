@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\HTTP\Controllers\AuthController;
 use Auth;
+use App\Models\Business;
 class BusinessOwner
 {
     /**
@@ -16,9 +17,12 @@ class BusinessOwner
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $business = Auth::user()->Business()->with('Business')->first();
-        if($business && ($business['business_id']== $request->business_id)){
+
+        
+        $business = Business::find($request->business_id);
+        if($business && ( $business->owner_id == (string)Auth::user()->id) ){
             return $next($request);
+            
         }
         else{
             return redirect()->action([AuthController::class, 'AuthError']);

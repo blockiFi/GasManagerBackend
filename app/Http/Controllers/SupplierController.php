@@ -99,6 +99,6 @@ class SupplierController extends Controller
       $supplier->bank_name = $request->bank_name;
       $supplier->save();
       $response['message'] = 'supplier Updated Successfully!!!';
-        return response()->json($response ,400);
+        return response()->json($response ,200);
     }
 }
