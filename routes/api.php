@@ -12,6 +12,7 @@ use App\HTTP\Controllers\SalesController;
 use App\HTTP\Controllers\SettingsController;
 use App\HTTP\Controllers\SupplierController;
 use App\HTTP\Controllers\SupplyController;
+use App\HTTP\Controllers\BusinessUserController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -39,6 +40,10 @@ Route::middleware( ['auth:api' ])->group(function () {
 
         Route::post('/business/sales/confirm_sales', [SalesController::class, 'confirmSales']);
         Route::post('/business/supplier/get_business_suppliers', [SupplierController::class, 'getBisinessSupliers']);
+
+        Route::post('/business/users/get_business_users', [BusinessUserController::class, 'getBusinessUsers']);
+        Route::post('/business/users/reset_password', [BusinessUserController::class, 'ResetPassword']);
+        Route::post('/business/users/add_employee', [BusinessUserController::class, 'AddEmployee']);
         
     });
     Route::middleware( ['businessManager'])->group(function () {
