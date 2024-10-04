@@ -12,10 +12,32 @@ use App\Models\Sale;
 use App\Models\Price;
 use Carbon\Carbon;
 use App\Models\Sale_Reciept;
+use App\Models\Supply;
+use App\Models\Setting;
+use App\Models\Business_Setting;
+use App\Models\Dispenser;
 class SalesController extends Controller
 {
     //
     // get loaction sales
+
+public function getSalesProfit($supply_id){
+    $sales = Sale::where('supply_id' , '=' , $supply_id)->get();
+                $totalSales = 0;
+                $totalKg = 0;
+                foreach($sales as $key => $sale){
+                    $totalSales = $totalSales + $sale->amount;
+                    $totalKg = $totalKg + $sale->kg_quantity;
+                    $sales[$key]['average_price'] =$sale->amount / $sale->kg_quantity;
+
+                }
+        $supply = Supply::find($supply_id);
+        $data['amount'] = $totalSales ;
+        $data['profit'] = $totalSales - $supply->amount;
+        $data['kg'] = $totalKg ;
+        $data['sales'] = $sales ;
+        return  $data;
+}
 public function getLocationSales(Request $request , $dispenser = null){
     $validator = Validator::make($request->all(), [
         "business_id" => "required|exists:businesses,id",
@@ -37,7 +59,9 @@ if($dispenser){
 
 
 }
+$location = Location::find($request->location_id);
 $response['data'] =$sales;
+$response['location'] =$location;
 return response()->json($response ,200);
 }
 
@@ -63,6 +87,14 @@ public function addSales(Request $request){
         return response()->json($response ,400);
   } 
 
+ $supply  = Supply::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ], ['sold' ,'=' , '0' ]])->first();
+  if($supply){
+
+  }else{
+    $response['code'] = 400;
+    $response['errors'] = ["No Supply Available"];
+    return response()->json($response ,400);
+  }
    $prevSales = Sale::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ]])->latest()->first();
   $price = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['active' , '=' , 'true']])->first();
   if($prevSales){
@@ -85,6 +117,7 @@ public function addSales(Request $request){
     $sales->sales_date = Carbon::parse($request->sales_date);
     $sales->uploaded_by = Auth::user()->id;
     $sales->price_id  = $price->id;
+    $sales->supply_id = $supply->id;
     $sales->save();
   }else{
 
@@ -107,9 +140,63 @@ public function addSales(Request $request){
     $sales->sales_date = Carbon::parse($request->sales_date);
     $sales->uploaded_by = Auth::user()->id;
     $sales->price_id  = $price->id;
+    $sales->supply_id = $supply->id;
     $sales->save();
   
   }
+  $dispenser = Dispenser::find($request->dispenser_id);
+
+  if($sales->kg_quantity > $dispenser->current_level){
+    $dispenser->current_level = 0;
+
+  }else{
+    $dispenser->current_level= $dispenser->current_level -  $sales->kg_quantity;
+    
+  }
+
+  if($sales->kg_quantity > $supply->available_quantity){
+    $remainingKg = $sales->kg_quantity -  $supply->available_quantity;
+    $setting = Setting::where('name' , '=' , 'empty_sale')->first();
+    if($setting){
+        $business_setting = Business_Setting::where([['business_id' , '=' , $request->business_id] , ['setting_id' , '=' ,$setting->id]])->first();
+        if($business_setting){
+            if($business_setting->value == 'true'){
+                $supply->available_quantity  = 0;
+                $supply->sold = 1;
+                $sales = Sale::where('supply_id' , '=' , $supply->id)->get();
+                $totalSales = 0;
+                foreach($sales as $sale){
+                    $totalSales = $totalSales + $sale->amount;
+              
+                }
+              $supply->profit =   $totalSales - $supply->amount;
+              $supply->excess_kg =   $remainingKg;
+              $supply->save();
+
+            }
+
+            else{
+                $supply->available_quantity  = 0;
+                $supply->sold = 1;
+                $supply->save();
+                $newSupply  = Supply::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ], ['sold' ,'=' , '0' ]])->first();
+                if($newSupply){
+                $newSupply->available_quantity = $newSupply->available_quantity - $remainingKg;
+                 $newSupply->save();
+                }
+            }
+        }
+    }
+
+  }else{
+
+    $supply->available_quantity = $supply->available_quantity -  $sales->kg_quantity;
+    $supply->save();
+    
+  }
+//   $sales->supply_id = $supply->id;
+  
+  $dispenser->save();
   $response['message'] = "Sales Added Successfully!!!";
 return response()->json($response ,200);
 }

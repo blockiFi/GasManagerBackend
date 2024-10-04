@@ -17,15 +17,17 @@ use App\HTTP\Controllers\BusinessUserController;
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:api');
+
+
 Route::get('/AuthError', [AuthController::class, 'AuthError']);
 Route::post('/register', [AuthController::class, 'Register']);
 Route::post('/login', [AuthController::class, 'Login']);
 
 
 Route::middleware( ['auth:api' ])->group(function () {
-
+    Route::post('/register_business', [BusinessController::class, 'createBusiness']);
     Route::middleware( ['BusinessOwner'])->group(function () {
-        Route::post('/register_business', [BusinessController::class, 'createBusiness']);
+        
         Route::post('/update_business', [BusinessController::class, 'updateBusiness']);
        
         Route::post('/business/add_location', [LocationController::class, 'addBusinessLocation']);
@@ -64,6 +66,7 @@ Route::middleware( ['auth:api' ])->group(function () {
         Route::post('/business/sales/upload_reciept', [SalesController::class, 'uploadReciept']);
         Route::post('/business/sales/get_reciept', [SalesController::class, 'getSalesReceipts']);
         
+        Route::post('/get_business/location/dispenser', [DispenserController::class, 'getLocationDispensers']);
         
         
         
@@ -73,14 +76,22 @@ Route::middleware( ['auth:api' ])->group(function () {
     Route::post('/business/location/with_price}', [LocationController::class, 'getBusinessLocationsWithPrice']);
     Route::get('/get_business', [BusinessController::class, 'getUserBusiness']);
     Route::get('/get_business/sales', [BusinessController::class, 'getUserBusinessWithSales']);
-    Route::get('/get_business/location/dispenser/{location_id}', [DispenserController::class, 'getLocationDispensers']);
+    
     Route::get('/get_business/all_dispenser', [DispenserController::class, 'getAllBusinessDispensers']);
-
+    Route::get('/get_business/get_sales_profit/{supply_id}', [SalesController::class, 'getSalesProfit']);
+    
     Route::get('/get_business/settings/{withBusiness?}', [SettingsController::class, 'getGeneralSettings']);
 
     Route::post('/business/settings/add_setting', [SettingsController::class, 'addSeting']);
     Route::post('/business/settings/initialize_business_settings', [SettingsController::class, 'initializeBusinessSettings']);
     Route::post('/business/settings/set_business_setting', [SettingsController::class, 'setBusinessSetting']);
     Route::post('/business/settings/get_business_setting', [SettingsController::class, 'getBusinessSetings']);
-    
+
+
+
+    Route::post('/get_business/settings/get_settings', [SettingsController::class, 'getUserBusinessSetings']);
+    Route::post('/get_business/settings/update_settings', [SettingsController::class, 'UpdateUserBusinessSetings']);
+
+
+   
 });

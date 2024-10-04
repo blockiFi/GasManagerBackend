@@ -13,6 +13,7 @@ class DispenserController extends Controller
     //
     public function AddDispenser(Request $request){
         $validator = Validator::make($request->all(), [
+            "business_id" => "required|exists:businesses,id",
             "location_id" => "required|exists:locations,id",
             "name" =>  "required",
             'capacity' => 'required',
@@ -44,8 +45,20 @@ class DispenserController extends Controller
             return response()->json($response ,400);
       }
     }
-    public function getLocationDispensers($location_id){
-        $response['data'] = $this->getDispensers($location_id);
+    public function getLocationDispensers(Request $request){
+        $validator = Validator::make($request->all(), [
+            "business_id" => "required|exists:businesses,id",
+            "location_id" => "required|exists:locations,id"
+      ]);
+
+      if ($validator->fails()) {
+
+           
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+            return response()->json($response ,400);
+      }
+        $response['data'] = $this->getDispensers($request->location_id);
         return response()->json($response ,200); 
     }
     public function getDispensers($location_id){

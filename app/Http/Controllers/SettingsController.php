@@ -138,4 +138,64 @@ class SettingsController extends Controller
       $response['data'] = $settings;
       return response()->json($response ,200);
     }
+
+    public function getUserBusinessSetings(Request $request){
+      $validator = Validator::make($request->all(), [
+        "business_id" => "required|exists:businesses,id"
+        
+  ]);
+
+  if ($validator->fails()) {
+
+       
+        $response['code'] = 400;
+        $response['errors'] = $validator->messages()->all();
+        return response()->json($response ,400);
+  }  
+
+  $settings = Setting::all();
+  foreach($settings as $key => $setting){
+    $business_setting = Business_Setting::where( [["business_id" , "=" , $request->business_id] , ["setting_id" , "=" , $setting->id ]] )->first();
+    if($business_setting){
+      $settings[$key]["value"] = $business_setting;
+    }else{
+     $business_setting = new  Business_Setting;
+     $business_setting->business_id = $request->business_id;
+     $business_setting->setting_id  = $setting->id;
+     $business_setting->value  = $setting->default;
+     $business_setting->save();
+     $settings[$key]["value"] = $business_setting;
+    }
+
+  }
+
+  $response['data'] = $settings;
+  return response()->json($response ,200);
+
+    }
+
+    public function updateUserBusinessSetings(Request $request){
+      $validator = Validator::make($request->all(), [
+        "business_id" => "required|exists:businesses,id",
+        "setting_id" => "required|exists:business__settings,id",
+        "value" => "required"
+
+        
+  ]);
+
+  if ($validator->fails()) {
+
+       
+        $response['code'] = 400;
+        $response['errors'] = $validator->messages()->all();
+        return response()->json($response ,400);
+  }
+  
+  $business_setting = Business_Setting::find($request->setting_id);
+  $business_setting->value = $request->value;
+  $business_setting->save();
+  $response['message'] = "Settings Updated Successfully!!!";
+  return response()->json($response ,200);
+    }
+
 }

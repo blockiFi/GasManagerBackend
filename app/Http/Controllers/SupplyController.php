@@ -67,8 +67,12 @@ class SupplyController extends Controller
       $supply->location_id = $request->location_id;
       $supply->dispenser_id = $request->dispenser_id;
       $supply->quantity = $request->quantity;
+      $supply->available_quantity = $request->quantity;
+      $supply->sold = 0;
+      $supply->profit = 0;
       $supply->amount = $request->amount;
       $supply->supplier_id = $request->supplier_id;
+      $supply->excess_kg = 0;
       $supply->purchased_at = Carbon::now();
       $supply->save();
       $response['message'] = "Supply Added Successfully!!!";

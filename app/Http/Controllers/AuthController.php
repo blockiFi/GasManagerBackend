@@ -48,7 +48,6 @@ class AuthController extends Controller
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,401);
         }
-        
         if(Auth::attempt(['email' => $request->email, 'password' => $request->password])){
             $user = Auth::user();
             $res['token'] = $user->createToken(name : 'gasManager')->accessToken;

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Business_User;
 use App\Models\User;
 use Validator;
+use Str;
 class BusinessUserController extends Controller
 {
     //
@@ -22,7 +23,7 @@ class BusinessUserController extends Controller
             return response()->json($response ,400);
       }
       
-      $businessUsers = Business_User::where("business_id" , "="  , $request->business_id)->with("user")->get();
+      $businessUsers = Business_User::where("business_id" , "="  , $request->business_id)->with("user")->orderBy('created_at' , 'desc')->get();
       $response['data'] = $businessUsers;
       return response()->json($response ,200); 
     }
