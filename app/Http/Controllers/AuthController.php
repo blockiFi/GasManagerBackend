@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\Business;
+use App\Models\Business_User;
 use Validator;
 use Str;
 use DB;
@@ -52,6 +54,14 @@ class AuthController extends Controller
             $user = Auth::user();
             $res['token'] = $user->createToken(name : 'gasManager')->accessToken;
             $res['user'] = $user;
+            
+            $usersBusiness  = Business_User::where('user_id' , '=' , $user->id)->first();
+            if($usersBusiness){
+                $business = Business::find($usersBusiness->business_id);
+                $res['business']  = $business ;
+            }else{
+                $res['business'] =  Auth::user()->Business(); 
+            }
             $res['message'] = "Login Successful";
             $res['code'] = 200;
             return response()->json($res ,200);  

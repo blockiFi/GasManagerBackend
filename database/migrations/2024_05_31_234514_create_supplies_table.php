@@ -24,6 +24,10 @@ return new class extends Migration
             $table->string('purchased_at');
             $table->string('delivered_at');
             $table->boolean('supplied')->default(false);
+            $table->interger('available_quantity')->default(0);
+            $table->interger('prev_quantity')->default(0);
+            $table->interger('sold')->default(0);
+            $table->interger('excess_kg')->default(0);
             $table->timestamps();
         });
     }

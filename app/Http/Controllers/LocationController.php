@@ -143,6 +143,32 @@ class LocationController extends Controller
         return response()->json($response ,200); 
 
     }
+    public function changeManager(Request $request){
+      $validator = Validator::make($request->all(), [
+        "business_id" => "required|exists:businesses,id",
+        "location_id" => "required|exists:locations,id",
+        "user_id" =>  "required|exists:users,id"
+  ]);
+
+  if ($validator->fails()) {
+
+       
+        $response['code'] = 400;
+        $response['errors'] = $validator->messages()->all();
+        return response()->json($response ,400);
+  }
+  $usersBusiness = Business_User::where([['user_id' , '=' , $request->user_id] , ['business_id' , '=' , $request->business_id]])->get();
+  if(count($usersBusiness) > 0){
+    $location = Location::find($request->location_id);
+    $location->manager_id = $request->user_id;
+    $location->save();
+    $response['message'] = "Manager Changed Successfully";
+    return response()->json($response ,200); 
+  }
+  $response['errors'] = ["User does not belong to this business"];
+  return response()->json($response ,400); 
+  
+    }
     public function getLocations($business_id){
          $business = business::where('id' , $business_id)->with(['Locations' , 'Locations.Manager'])->first();
       

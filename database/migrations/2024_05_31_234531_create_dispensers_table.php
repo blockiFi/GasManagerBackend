@@ -17,7 +17,9 @@ return new class extends Migration
             $table->string('location_id');
             $table->string('name');
             $table->string('capacity');
+            $table->string('empty_sale');
             $table->string('current_level')->default(0);
+            $table->string('prev_level')->default(0);
             $table->timestamps();
         });
     }

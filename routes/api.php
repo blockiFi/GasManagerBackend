@@ -13,10 +13,14 @@ use App\HTTP\Controllers\SettingsController;
 use App\HTTP\Controllers\SupplierController;
 use App\HTTP\Controllers\SupplyController;
 use App\HTTP\Controllers\BusinessUserController;
+use App\Http\Controllers\ImageAnalysisController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:api');
+
+
+Route::post('/analyze-image', [ImageAnalysisController::class, 'upload']);
 
 
 Route::get('/AuthError', [AuthController::class, 'AuthError']);
@@ -34,7 +38,9 @@ Route::middleware( ['auth:api' ])->group(function () {
         Route::post('/business/update_location', [LocationController::class, 'updateBusinessLocation']);
         Route::post('/business/add_dispenser', [DispenserController::class, 'AddDispenser']);
         Route::post('/business/update_dispenser', [DispenserController::class, 'UpdateDispenser']);
+        Route::post('/business/update_dispenser/setting', [DispenserController::class, 'updateDispenserSaleSettings']);
         Route::post('/business/location/set_price', [PriceController::class, 'setLocationPrice']);
+        Route::post('/business/location/change_manager', [LocationController::class, 'changeManager']);
         Route::post('/business/supplier/add_business_supplier', [SupplierController::class, 'addSupplier']);
         Route::post('/business/supplier/update_business_supplier', [SupplierController::class, 'updateSupplier']);
         
@@ -73,12 +79,15 @@ Route::middleware( ['auth:api' ])->group(function () {
     });   
 
     Route::post('/get_business/locations/{withDispenser?}', [LocationController::class, 'getBusinessLocations']);
-    Route::post('/business/location/with_price}', [LocationController::class, 'getBusinessLocationsWithPrice']);
+    Route::post('/business/location/{with_price}', [LocationController::class, 'getBusinessLocationsWithPrice']);
     Route::get('/get_business', [BusinessController::class, 'getUserBusiness']);
     Route::get('/get_business/sales', [BusinessController::class, 'getUserBusinessWithSales']);
     
     Route::get('/get_business/all_dispenser', [DispenserController::class, 'getAllBusinessDispensers']);
     Route::get('/get_business/get_sales_profit/{supply_id}', [SalesController::class, 'getSalesProfit']);
+    Route::post('/get_business/get_sales_between', [SalesController::class, 'getSalesBetween']);
+    Route::post('/get_business/get_sales_data', [SalesController::class, 'getSalesBreakdown']);
+    Route::post('/get_business/get_month_sales_data', [SalesController::class, 'getMonthSales']);
     
     Route::get('/get_business/settings/{withBusiness?}', [SettingsController::class, 'getGeneralSettings']);
 

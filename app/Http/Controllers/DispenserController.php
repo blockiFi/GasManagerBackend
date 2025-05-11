@@ -11,6 +11,36 @@ use Auth;
 class DispenserController extends Controller
 {
     //
+    public function updateDispenserSaleSettings(Request $request){
+        $validator = Validator::make($request->all(), [
+            "business_id" => "required|exists:businesses,id",
+            "location_id" => "required|exists:locations,id",
+            "dispenser_id" =>  "required|exists:dispensers,id",
+            
+      ]);
+
+      if ($validator->fails()) {
+
+           
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+            return response()->json($response ,400);
+      }
+
+      $dispenser = Dispenser::find($request->dispenser_id);
+      if($dispenser->business_id == $request->business_id && $dispenser->location_id = $request->location_id){
+        if($dispenser->empty_sale == "true"){
+            $dispenser->empty_sale = "false";
+        }else{
+            $dispenser->empty_sale = "true";
+        }
+        $dispenser->save();
+        $response['message'] = 'Dispenser Sales Setting Updated Successfully';
+        return response()->json($response ,200);
+      }
+      $response['errors'] = ['Dispenser does not belong to this business'];
+      return response()->json($response ,400);
+    }
     public function AddDispenser(Request $request){
         $validator = Validator::make($request->all(), [
             "business_id" => "required|exists:businesses,id",
@@ -62,7 +92,7 @@ class DispenserController extends Controller
         return response()->json($response ,200); 
     }
     public function getDispensers($location_id){
-        return Dispenser::where('location_id' , '=' , $location_id)->with(['Sales' ,'Sales.Price'])->get();
+        return Dispenser::where([['location_id' , '=' , $location_id ] , ['active' , '=' , '1']])->with(['Sales' ,'Sales.Price'])->get();
     }
     public function UpdateDispenser(Request $request){
         $validator = Validator::make($request->all(), [
