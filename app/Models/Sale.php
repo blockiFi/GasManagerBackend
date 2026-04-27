@@ -43,4 +43,8 @@ class Sale extends Model
 
     }
 
+    public function Supply() : BelongsTo
+    {
+        return $this->belongsTo(Supply::class);
+    }
 }

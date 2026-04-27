@@ -2,13 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Business;
+use App\Models\Location;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Models\Location;
-use App\Models\Business;
-use Auth;
-
 
 class businessManager
 {
@@ -19,20 +17,25 @@ class businessManager
      */
     public function handle(Request $request, Closure $next): Response
     {
-       
-        $business = Auth::user()->Business()->with('Business')->first();
-        
-        $Location = Location::find($request->location_id);
+        $user = $request->user();
         $business = Business::find($request->business_id);
-        if($business && ( $business->owner_id == (string)Auth::user()->id) ){
-            return $next($request);
-            
-        }
-        else if($Location->manager_id == (string)Auth::user()->id) {
+
+        if ($business && ((string) $business->owner_id === (string) $user->id)) {
             return $next($request);
         }
-        else{
-            return redirect()->action([AuthController::class, 'AuthError']);
+
+        $location = $request->filled('location_id')
+            ? Location::find($request->location_id)
+            : null;
+
+        if ($location && ((string) $location->manager_id === (string) $user->id)) {
+            return $next($request);
         }
+
+        return response()->json([
+            'error' => 'User Not Permitted',
+            'code' => 403,
+            'errors' => ['You do not have access to manage this business or location.'],
+        ], 403);
     }
 }

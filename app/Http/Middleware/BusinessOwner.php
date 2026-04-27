@@ -2,12 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Business;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\HTTP\Controllers\AuthController;
-use Auth;
-use App\Models\Business;
+
 class BusinessOwner
 {
     /**
@@ -17,15 +16,15 @@ class BusinessOwner
      */
     public function handle(Request $request, Closure $next): Response
     {
-
-        
         $business = Business::find($request->business_id);
-        if($business && ( $business->owner_id == (string)Auth::user()->id) ){
+        if ($business && ((string) $business->owner_id === (string) $request->user()->id)) {
             return $next($request);
-            
         }
-        else{
-            return redirect()->action([AuthController::class, 'AuthError']);
-        }
+
+        return response()->json([
+            'error' => 'User Not Permitted',
+            'code' => 403,
+            'errors' => ['You must be the business owner for this action.'],
+        ], 403);
     }
 }

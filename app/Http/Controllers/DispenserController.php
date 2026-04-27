@@ -26,9 +26,12 @@ class DispenserController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
 
       $dispenser = Dispenser::find($request->dispenser_id);
-      if($dispenser->business_id == $request->business_id && $dispenser->location_id = $request->location_id){
+      if($dispenser->business_id == $request->business_id && $dispenser->location_id == $request->location_id){
         if($dispenser->empty_sale == "true"){
             $dispenser->empty_sale = "false";
         }else{
@@ -65,6 +68,7 @@ class DispenserController extends Controller
         $dispenser->location_id = $request->location_id;
         $dispenser->capacity = $request->capacity;
         $dispenser->current_level = 0;
+        $dispenser->active = '1';
         $dispenser->save();
         $response['data'] = $this->getDispensers($request->location_id);
         $response['message'] = "Dispenser Added Successfully";
@@ -88,12 +92,46 @@ class DispenserController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
         $response['data'] = $this->getDispensers($request->location_id);
         return response()->json($response ,200); 
     }
     public function getDispensers($location_id){
         return Dispenser::where([['location_id' , '=' , $location_id ] , ['active' , '=' , '1']])->with(['Sales' ,'Sales.Price'])->get();
     }
+    public function setDispenserActive(Request $request){
+        $validator = Validator::make($request->all(), [
+            "dispenser_id" => "required|exists:dispensers,id",
+            "business_id" => "required|exists:businesses,id",
+            "active" => "required|in:0,1",
+        ]);
+
+        if ($validator->fails()) {
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+            return response()->json($response, 400);
+        }
+
+        $business = Auth::user()->Business()->with('Business')->first()['Business'];
+        if ((string) $business->id !== (string) $request->business_id) {
+            $response['errors'] = ['Business mismatch'];
+            return response()->json($response, 403);
+        }
+
+        $dispenser = Dispenser::find($request->dispenser_id);
+        if (!$dispenser || (string) $dispenser->business_id !== (string) $business->id) {
+            $response['errors'] = ['Dispenser not business dispenser'];
+            return response()->json($response, 400);
+        }
+
+        $dispenser->active = $request->active == 1 || $request->active === '1' ? '1' : '0';
+        $dispenser->save();
+        $response['message'] = $dispenser->active === '1' ? 'Dispenser activated' : 'Dispenser deactivated';
+        return response()->json($response, 200);
+    }
+
     public function UpdateDispenser(Request $request){
         $validator = Validator::make($request->all(), [
             "dispenser_id" => "required|exists:dispensers,id",
@@ -120,7 +158,7 @@ class DispenserController extends Controller
     }
     public function getAllBusinessDispensers(){
         $business = Auth::user()->Business()->with('Business')->first()['Business'];
-        $dispensers = Dispenser::where('business_id' , '=' , $business->id)->with(['Sales' ,'Sales.Price'])->get();
+        $dispensers = Dispenser::where('business_id' , '=' , $business->id)->with(['Location', 'Sales' ,'Sales.Price'])->get();
         $response['data'] = $dispensers;
         return response()->json($response ,200); 
     }

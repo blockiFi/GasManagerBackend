@@ -10,9 +10,10 @@ use App\Models\Location;
 use App\Models\Sale;
 use App\Models\Setting;
 use App\Models\Business_Setting;
+use App\Http\Requests\InitializeBusinessSettingsRequest;
+
 class SettingsController extends Controller
 {
-    //
     public function getGeneralSettings($withBusinessSettings = null){
         if($withBusinessSettings){
             $settings = Setting::with(['Settings'])->get();
@@ -59,18 +60,7 @@ class SettingsController extends Controller
         return response()->json($response ,200);
     }
 
-    public function initializeBusinessSettings(Request $request){
-        $validator = Validator::make($request->all(), [
-            "business_id" => "required|exists:businesses,id"
-      ]);
-    
-      if ($validator->fails()) {
-    
-           
-            $response['code'] = 400;
-            $response['errors'] = $validator->messages()->all();
-            return response()->json($response ,400);
-      } 
+    public function initializeBusinessSettings(InitializeBusinessSettingsRequest $request){
       
       $settings = Setting::all();
       foreach($settings as $setting){
@@ -102,7 +92,10 @@ class SettingsController extends Controller
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
-      }  
+      }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
 
       $settingExist = Business_Setting::where([['setting_id' , '=' , $request->setting_id] , ['business_id' , '=' , $request->business_id]])->first();
       if($settingExist){
@@ -132,7 +125,10 @@ class SettingsController extends Controller
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
-      }  
+      }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
       
       $settings =  Business_Setting::where('business_id' , '=' , $request->business_id)->with('Setting')->get();
       $response['data'] = $settings;
@@ -151,7 +147,10 @@ class SettingsController extends Controller
         $response['code'] = 400;
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
-  }  
+  }
+    if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+        return $denied;
+    }
 
   $settings = Setting::all();
   foreach($settings as $key => $setting){
@@ -190,8 +189,14 @@ class SettingsController extends Controller
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
   }
-  
+    if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+        return $denied;
+    }
+
   $business_setting = Business_Setting::find($request->setting_id);
+        if (! $business_setting || (string) $business_setting->business_id !== (string) $request->business_id) {
+            return response()->json(['code' => 403, 'errors' => ['Setting does not belong to this business.']], 403);
+        }
   $business_setting->value = $request->value;
   $business_setting->save();
   $response['message'] = "Settings Updated Successfully!!!";

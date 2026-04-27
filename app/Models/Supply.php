@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Supply extends Model
 {
@@ -34,6 +36,14 @@ class Supply extends Model
     {
         return $this->belongsTo(User::class  , 'recieved_by');
 
+    }
+    public function Sales(): HasMany
+    {
+        return $this->hasMany(Sale::class);
+    }
+    public function LastSale(): HasOne
+    {
+        return $this->hasOne(Sale::class)->orderBy('sales_date', 'desc');
     }
 
 

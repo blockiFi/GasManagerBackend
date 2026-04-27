@@ -16,42 +16,77 @@ use App\Models\Supply;
 use App\Models\Setting;
 use App\Models\Business_Setting;
 use App\Models\Dispenser;
+use App\Http\Requests\GetSalesGroupedByWeeksRequest;
+use App\Services\SalesGroupedAnalyticsService;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class SalesController extends Controller
 {
-    //
-    // get loaction sales
+    /**
+     * Sale whose closing readings become the next record's opening (meter chain).
+     * Uses calendar sales_date (then id), not insertion order alone, so backdated
+     * and bulk entries still chain to the correct prior reading.
+     */
+    protected function previousSaleForDispenser(
+        string $businessId,
+        string $locationId,
+        string $dispenserId,
+        Carbon $salesDate
+    ): ?Sale {
+        $day = $salesDate->copy()->startOfDay();
 
-public function getSalesProfit($supply_id){
-    $sales = Sale::where('supply_id' , '=' , $supply_id)->get();
-    $data = $this->getProfit($sales);
-        $data['sales'] = $sales ;
-        return  $data;
-}
-// public function getMonthlySalesBetween(Request $request){
+        $base = Sale::query()
+            ->where('business_id', '=', $businessId)
+            ->where('location_id', '=', $locationId)
+            ->where('dispenser_id', '=', $dispenserId);
 
-//     $validator = Validator::make($request->all(), [
-//         "business_id" => "required|exists:businesses,id",
-//         "location_id" => "required|exists:locations,id",
-//         "dispenser_id" => "required|exists:dispensers,id",
-//         "start_month" => "required",
-//         "start_year" => "required",
-//         "end_month" => "required",
-//         "end_year" => "required"
-//   ]);
+        $sameDay = (clone $base)
+            ->whereDate('sales_date', '=', $day)
+            ->orderByDesc('id')
+            ->first();
 
-//   if ($validator->fails()) {
+        if ($sameDay) {
+            return $sameDay;
+        }
 
-       
-//         $response['code'] = 400;
-//         $response['errors'] = $validator->messages()->all();
-//         return response()->json($response ,400);
-//   }
-  
-  
+        return (clone $base)
+            ->whereDate('sales_date', '<', $day)
+            ->orderByDesc('sales_date')
+            ->orderByDesc('id')
+            ->first();
+    }
 
-// }
-public function getMonthSales(Request $request){
+    public function getSalesGroupedByWeeks(GetSalesGroupedByWeeksRequest $request)
+    {
+        $result = app(SalesGroupedAnalyticsService::class)->buildGroupedSales($request);
+        if (! $result['success']) {
+            return response()->json([
+                'code' => $result['code'],
+                'errors' => $result['errors'],
+            ], $result['code']);
+        }
+
+        return response()->json([
+            'data' => $result['data'],
+            'code' => 200,
+        ], 200);
+    }
+
+    public function getSalesProfit($supply_id)
+    {
+        if ($denied = $this->denyUnlessCanAccessSupplyForUser($supply_id)) {
+            return $denied;
+        }
+        $sales = Sale::where('supply_id', '=', $supply_id)->get();
+        $data = $this->getProfit($sales);
+        $data['sales'] = $sales;
+
+        return $data;
+    }
+    public function getMonthSales(Request $request)
+    {
     $validator = Validator::make($request->all(), [
         "business_id" => "required|exists:businesses,id",
         "location_id" => "required|exists:locations,id",
@@ -66,32 +101,42 @@ public function getMonthSales(Request $request){
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
   }
-    $from = date($request->year.'-'.$request->month.'-01');
-    $to = date($request->year.'-'.$request->month.'-32');
-    $sales = Sale::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $request->location_id] ])->whereBetween('sales_date', [$from, $to])->get();
+    if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+        return $denied;
+    }
+        $from = Carbon::create((int) $request->year, (int) $request->month, 1)->startOfDay();
+        $to = $from->copy()->endOfMonth();
+        $sales = Sale::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $request->location_id] ])->whereBetween('sales_date', [$from->toDateString(), $to->toDateString()])->get();
     $result = $this->getProfit($sales);           
                 foreach($sales as $key => $sale){
-                    $sales[$key]['average_price'] =$sale->amount / $sale->kg_quantity;
+                    $sales[$key]['average_price'] = $sale->kg_quantity
+                        ? $sale->amount / $sale->kg_quantity
+                        : null;
 
                 }
 
-        $supply = Supply::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['sold' ,'=' , '1']])->whereBetween('updated_at', [$from, $request->year.'-'.$request->month.'-31'])->get();
+        $supply = Supply::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['sold' ,'=' , '1']])->whereBetween('updated_at', [$from, $to])->get();
         $profitfromExcess  = 0 ;
+        $excessKg =0;
         foreach($supply as $key => $sup){
-            $profit = $sup->excess_kg * $sup->amount / $sup->quantity;
+            $excessKg += $sup->excess_kg ;
+            $supQty = (float) $sup->quantity;
+            $profit = $supQty > 0 ? $sup->excess_kg * $sup->amount / $supQty : 0;
             $profitfromExcess = $profitfromExcess + $profit;
         }
         
         $data['amount'] = $result['totalSales'] ;
-        $data['kg'] = $result['totalKg'] ;
+        $data['kg'] = + $result['totalKg'] ;
         $data['profit'] = $result['profit'] ;
         $data['profitfromExcess'] = $profitfromExcess;
+        $data['excessKg'] = $excessKg;
         $data['totalProfit'] = $result['profit'] + $profitfromExcess;
         $data['sales'] = $sales ;
         $data['suppplies'] = $supply;
         return  $data;
-}
-public function getDailySales(Request $request){
+    }
+
+    public function getDailySales(Request $request){
     $validator = Validator::make($request->all(), [
         "business_id" => "required|exists:businesses,id",
         "location_id" => "required|exists:locations,id",
@@ -106,6 +151,9 @@ public function getDailySales(Request $request){
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
   }
+    if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+        return $denied;
+    }
     $from = date($request->date);
     $to = date($request->date);
     $sales = Sale::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['dispenser_id' , '=' , $request->dispenser_id]])->whereBetween('sales_date', [$from, $to])->get();
@@ -136,7 +184,13 @@ public function getSalesBetween(Request $request){
         return response()->json($response ,400);
   }
 
-  
+    $location = Location::find($request->location_id);
+    if (! $location) {
+        return response()->json(['code' => 404, 'errors' => ['Location not found.']], 404);
+    }
+    if (! $this->businessAuth()->userCanAccessLocation(Auth::user(), $location->business_id, $location->id)) {
+        return response()->json(['code' => 403, 'errors' => ['You do not have access to this location.']], 403);
+    }
 
    $from = date($request->date1);
   $to = date($request->date2);
@@ -161,7 +215,11 @@ public function getProfit($sales = []) {
         
         foreach($sales as $key => $sale){
         $supply = Supply::find($sale->supply_id);
-        $unitPrice = $supply->amount / $supply->quantity;
+
+        $qty = $supply ? (float) $supply->quantity : 0.0;
+        $unitPrice = $supply
+            ? ($qty > 0 ? (float) $supply->amount / $qty : 0.0)
+            : 1.0;
         $cost = $unitPrice * $sale->kg_quantity;
         $totalSales = $totalSales + $sale->amount;
         $totalKg = $totalKg + $sale->kg_quantity;
@@ -179,28 +237,8 @@ public function getProfit($sales = []) {
         return $data;
 
 }
-// public function getMonthlySales(Request $request){
-//     $validator = Validator::make($request->all(), [
-//         "business_id" => "required|exists:businesses,id",
-//         "location_id" => "required|exists:locations,id",
 
-//   ]);
-
-//   if ($validator->fails()) {
-
-       
-//         $response['code'] = 400;
-//         $response['errors'] = $validator->messages()->all();
-//         return response()->json($response ,400);
-//   }
-//     $CurrentMonthSales = Sale::where([['business_id' , '=' , $request->business_id] , 
-//     ['location_id' , '=' , $location->id]])->whereBetween('sales_date', 
-//     [
-//         Carbon::now()->startOfMonth(), 
-//         Carbon::now()->endOfMonth()
-//     ])->get();
-// }
-public function getSalesBreakdown(Request $request) {
+    public function getSalesBreakdown(Request $request) {
     $validator = Validator::make($request->all(), [
         "business_id" => "required|exists:businesses,id"
   ]);
@@ -212,7 +250,20 @@ public function getSalesBreakdown(Request $request) {
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
   }
-  $locations = Location::where("business_id" , "=" , $request->business_id)->get();
+    if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+        return $denied;
+    }
+    $locationsQuery = Location::where('business_id', '=', $request->business_id);
+    $restrictedIds = $this->businessAuth()->userAccessibleLocationIds(Auth::user(), $request->business_id);
+    if ($restrictedIds !== null) {
+        if ($restrictedIds === []) {
+            $locations = collect();
+        } else {
+            $locations = $locationsQuery->whereIn('id', $restrictedIds)->get();
+        }
+    } else {
+        $locations = $locationsQuery->get();
+    }
   foreach($locations as $key => $location){
     $sales = Sale::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $location->id]])->get();
     $totalSaleData  =  $this->getProfit($sales);
@@ -249,10 +300,11 @@ public function getSalesBreakdown(Request $request) {
   $response['data'] =$locations;
 return response()->json($response ,200);
 }
-public function getLocationSales(Request $request , $dispenser = null){
+public function getLocationSales(Request $request , $dispenser = null ){
     $validator = Validator::make($request->all(), [
         "business_id" => "required|exists:businesses,id",
-        "location_id" => "required|exists:locations,id"
+        "location_id" => "required|exists:locations,id",
+        
   ]);
 
   if ($validator->fails()) {
@@ -262,19 +314,72 @@ public function getLocationSales(Request $request , $dispenser = null){
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
   }
+    if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+        return $denied;
+    }
 if($dispenser){
-    $sales = Sale::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $request->location_id ] , ['dispenser_id' , '=' ,$dispenser ]])->with(['Price' , 'Dispenser'] )->get();
+    if ($request->has('count')) {
+        $count = intval($request->input('count'));
+        $sales = Sale::where([
+                ['business_id', '=', $request->business_id],
+                ['location_id', '=', $request->location_id],
+                ['dispenser_id', '=', $dispenser]
+            ])
+            ->with(['Price', 'Dispenser'])
+            ->orderBy('sales_date', 'desc')
+            ->take($count)
+            ->get();
+    } else {
+        $sales = Sale::where([
+            ['business_id', '=', $request->business_id],
+            ['location_id', '=', $request->location_id],
+            ['dispenser_id', '=', $dispenser]
+        ])
+        ->with(['Price', 'Dispenser'])
+        ->get();
+    }
 
+    
+   
 }else{
-    $sales = Sale::where([['business_id' , '=' , $request->business_id] , ['location_id' , '=' , $request->location_id]])->with(['Price' , 'Dispenser'] )->get();
+    if ($request->has('count')) {
+        $count = intval($request->input('count'));
+        $sales = Sale::where([
+                ['business_id', '=', $request->business_id],
+                ['location_id', '=', $request->location_id]
+            ])
+            ->with(['Price', 'Dispenser', 'supply'])
+            ->orderBy('sales_date', 'desc')
+            ->take($count)
+            ->get();
+    } else {
+        $sales = Sale::where([
+                ['business_id', '=', $request->business_id],
+                ['location_id', '=', $request->location_id]
+            ])
+            ->with(['Price', 'Dispenser', 'supply'])
+            ->get();
+    }
 
 
 }
 foreach($sales as $key => $sale){
+
     $unitPrice =  $sale->kg_quantity == 0 ? 0 : $sale->amount / $sale->kg_quantity;
     $sales[$key]["average_price"] = $unitPrice;
-    $sales[$key]["expected_sales_amount"] = $sale->quantity * $sale->Price->price ;
+    if(!$sale->supply){
+        return response()->json([
+            'code' => 422,
+            'errors' => ['A sale record is missing supply linkage.'],
+        ], 422);
+    }
+    $sales[$key]["supply"] =  $sale->supply;
+    
+    $sales[$key]["expected_sales_amount"] = $sale->kg_quantity * $sale->Price->price;
+    $priceDif =     ((($unitPrice)) - ($sale->supply['amount'] /$sale->supply['quantity']));
+    $sales[$key]["profit"]  = $priceDif * $sale->kg_quantity;
 
+     
 
 }
 
@@ -305,7 +410,10 @@ public function addSales(Request $request){
         $response['code'] = 400;
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
-  } 
+  }
+    if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+        return $denied;
+    }
  $supply  = Supply::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ], ['sold' ,'=' , '0' ]])->first();
   if($supply){
 
@@ -313,8 +421,13 @@ public function addSales(Request $request){
     $supply  = Supply::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ]])->latest()->first();
   
   }
-
-   $prevSales = Sale::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ]])->latest()->first();
+   $salesDate = Carbon::parse($request->sales_date);
+    $prevSales = $this->previousSaleForDispenser(
+       (string) $request->business_id,
+       (string) $request->location_id,
+       (string) $request->dispenser_id,
+       $salesDate
+   );
    $price = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['active' , '=' , 'true']])->first();
   if(!$price){
     $response['code'] = 400;
@@ -323,7 +436,7 @@ public function addSales(Request $request){
     }
    if($prevSales){
 
-     $response =  $this->ValidateSales($request , $prevSales , $price);
+  $response =  $this->ValidateSales($request , $prevSales , $price);
     if($response['code'] == 400){
         return response()->json($response ,400);
     }
@@ -342,9 +455,9 @@ public function addSales(Request $request){
     }else{
         $sales->amount = (1000000 + (float)$request->closing_sales) - (float)$prevSales->closing_sales;
     }
-    
+
     $sales->kg_quantity = (float)$request->closing_kg - (float)$prevSales->closing_kg;
-    $sales->sales_date = Carbon::parse($request->sales_date);
+    $sales->sales_date = $salesDate;
     $sales->uploaded_by = Auth::user()->id;
     $sales->price_id  = $price->id;
     $sales->supply_id = $supply->id;
@@ -382,7 +495,7 @@ public function addSales(Request $request){
     }
     
     $sales->kg_quantity = (float)$request->closing_kg - (float)$request->opening_kg;;
-    $sales->sales_date = Carbon::parse($request->sales_date);
+    $sales->sales_date = $salesDate;
     $sales->uploaded_by = Auth::user()->id;
     $sales->price_id  = $price->id;
     $sales->supply_id = $supply->id;
@@ -545,10 +658,16 @@ public function  uploadReciept(Request $request){
         $response['code'] = 400;
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
-  } 
-  
+  }
+    if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+        return $denied;
+    }
 
         $sales = Sale::find($request->sales_id);
+        if (! $sales || (string) $sales->business_id !== (string) $request->business_id
+            || (string) $sales->location_id !== (string) $request->location_id) {
+            return response()->json(['code' => 403, 'errors' => ['Sale does not match this business or location.']], 403);
+        }
         $filePaths = [];
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
@@ -585,7 +704,13 @@ public function getSalesReceipts(Request $request){
         $response['code'] = 400;
         $response['errors'] = $validator->messages()->all();
         return response()->json($response ,400);
-  }  
+  }
+    if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+        return $denied;
+    }
+    if ($denied = $this->denyUnlessCanAccessSaleForUser($request->sales_id)) {
+        return $denied;
+    }
 
   $receipt = Sale_Reciept::where("sales_id" , "=" , $request->sales_id)->get();
             $response['data'] = $receipt;
@@ -615,10 +740,180 @@ public function confirmSales(Request $request){
         }
 
         $sales = Sale::find($request->sales_id);
+        if (! $sales || (string) $sales->business_id !== (string) $request->business_id
+            || (string) $sales->location_id !== (string) $request->location_id) {
+            return response()->json(['code' => 403, 'errors' => ['Sale does not match this business or location.']], 403);
+        }
         $sales->status = "confirmed";
         $sales->save();
         $response['code'] = 200;
         $response['message'] = "Sale Payment Confirmed Successfully!!!";
         return response()->json($response ,200);
 }
+
+public function editSaleDate(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'business_id' => 'required|exists:businesses,id',
+        'location_id' => 'required|exists:locations,id',
+        'sales_id' => 'required|exists:sales,id',
+        'sales_date' => 'required|date',
+    ]);
+
+    if ($validator->fails()) {
+        $response['code'] = 400;
+        $response['errors'] = $validator->messages()->all();
+
+        return response()->json($response, 400);
+    }
+
+    if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+        return $denied;
+    }
+
+    $sale = Sale::find($request->sales_id);
+    if (! $sale || (string) $sale->business_id !== (string) $request->business_id
+        || (string) $sale->location_id !== (string) $request->location_id) {
+        return response()->json(['code' => 403, 'errors' => ['Sale does not match this business or location.']], 403);
+    }
+
+    $oldDate = $sale->sales_date;
+    $sale->sales_date = Carbon::parse($request->sales_date);
+    $sale->save();
+
+    Log::info('Sale date updated', [
+        'sale_id' => $sale->id,
+        'business_id' => $sale->business_id,
+        'location_id' => $sale->location_id,
+        'user_id' => Auth::user()?->id,
+        'old_sales_date' => $oldDate,
+        'new_sales_date' => (string) $sale->sales_date,
+    ]);
+
+    return response()->json([
+        'code' => 200,
+        'message' => 'Sale date updated successfully.',
+        'data' => $sale,
+    ], 200);
+}
+
+    public function reverseLatestSale(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'business_id' => 'required|exists:businesses,id',
+            'location_id' => 'required|exists:locations,id',
+            'dispenser_id' => 'required|exists:dispensers,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'code' => 400,
+                'errors' => $validator->messages()->all(),
+            ], 400);
+        }
+
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
+
+        try {
+            return DB::transaction(function () use ($request) {
+                $sale = Sale::query()
+                    ->where('business_id', '=', $request->business_id)
+                    ->where('location_id', '=', $request->location_id)
+                    ->where('dispenser_id', '=', $request->dispenser_id)
+                    ->orderByDesc('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $sale) {
+                    return response()->json([
+                        'code' => 404,
+                        'errors' => ['No sale found for this dispenser.'],
+                    ], 404);
+                }
+
+                $dispenser = Dispenser::query()->whereKey($sale->dispenser_id)->lockForUpdate()->first();
+                if (! $dispenser) {
+                    return response()->json([
+                        'code' => 404,
+                        'errors' => ['Dispenser not found.'],
+                    ], 404);
+                }
+
+                $supply = Supply::query()->whereKey($sale->supply_id)->lockForUpdate()->first();
+                if (! $supply) {
+                    return response()->json([
+                        'code' => 404,
+                        'errors' => ['Supply not found for this sale.'],
+                    ], 404);
+                }
+
+                $saleId = $sale->id;
+                $kg = (float) $sale->kg_quantity;
+                $qty = max((float) $supply->quantity, 1.0);
+
+                if ((int) $supply->sold === 0) {
+                    $supply->available_quantity = (int) round((float) $supply->available_quantity + $kg);
+                    $supply->prev_quantity = $supply->available_quantity;
+                    $supply->save();
+                } else {
+                    $otherKgSum = (float) Sale::query()
+                        ->where('supply_id', '=', $supply->id)
+                        ->where('id', '!=', $sale->id)
+                        ->sum('kg_quantity');
+
+                    if ($otherKgSum >= $qty) {
+                        $unitCost = (float) $supply->amount / $qty;
+                        $saleProfit = (float) $sale->amount - ($kg * $unitCost);
+                        $supply->excess_kg = max(0, (float) $supply->excess_kg - $kg);
+                        $supply->profit = (float) $supply->profit - $saleProfit;
+                        $supply->save();
+                    } else {
+                        if ($kg > (float) $supply->prev_quantity) {
+                            throw new HttpResponseException(response()->json([
+                                'code' => 409,
+                                'errors' => ['Latest sale spilled into a later supply and cannot be reversed safely. Please adjust supplies manually.'],
+                            ], 409));
+                        }
+                        $supply->sold = 0;
+                        $supply->available_quantity = (int) $supply->prev_quantity;
+                        $supply->excess_kg = 0;
+                        $supply->profit = 0;
+                        $supply->save();
+                    }
+                }
+
+                $restored = (float) $dispenser->prev_level;
+                $dispenser->current_level = $restored;
+                $dispenser->prev_level = $restored;
+                $dispenser->save();
+
+                $receipts = Sale_Reciept::where('sales_id', '=', (string) $sale->id)->get();
+                foreach ($receipts as $reciept) {
+                    if ($reciept->image_path) {
+                        Storage::disk('public')->delete($reciept->image_path);
+                    }
+                    $reciept->delete();
+                }
+
+                $sale->delete();
+
+                Log::info('Sale reversed', [
+                    'sale_id' => $saleId,
+                    'business_id' => $request->business_id,
+                    'location_id' => $request->location_id,
+                    'dispenser_id' => $request->dispenser_id,
+                    'user_id' => Auth::user()?->id,
+                ]);
+
+                return response()->json([
+                    'code' => 200,
+                    'message' => 'Latest sale reversed; dispenser level and supply remaining restored.',
+                ], 200);
+            });
+        } catch (HttpResponseException $e) {
+            return $e->getResponse();
+        }
+    }
 }

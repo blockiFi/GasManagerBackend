@@ -2,33 +2,39 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\HTTP\Controllers\AuthController;
-use App\HTTP\Controllers\BusinessController;
-use App\HTTP\Controllers\LocationController;
-use App\HTTP\Controllers\DispenserController;
-use App\HTTP\Controllers\OperationCostController;
-use App\HTTP\Controllers\PriceController;
-use App\HTTP\Controllers\SalesController;
-use App\HTTP\Controllers\SettingsController;
-use App\HTTP\Controllers\SupplierController;
-use App\HTTP\Controllers\SupplyController;
-use App\HTTP\Controllers\BusinessUserController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BusinessController;
+use App\Http\Controllers\LocationController;
+use App\Http\Controllers\DispenserController;
+use App\Http\Controllers\OperationCostController;
+use App\Http\Controllers\PriceController;
+use App\Http\Controllers\SalesController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplyController;
+use App\Http\Controllers\BusinessUserController;
 use App\Http\Controllers\ImageAnalysisController;
+use App\Http\Controllers\WhatsAppController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:api');
 
-
-Route::post('/analyze-image', [ImageAnalysisController::class, 'upload']);
+// WhatsApp Webhook Routes (no authentication required)
+Route::get('/whatsapp/webhook', [WhatsAppController::class, 'verifyWebhook']);
+Route::post('/whatsapp/webhook', [WhatsAppController::class, 'handleWebhook']);
+Route::post('/whatsapp/verify-otp', [WhatsAppController::class, 'verifyOTP'])
+    ->middleware('throttle:login');
 
 
 Route::get('/AuthError', [AuthController::class, 'AuthError']);
 Route::post('/register', [AuthController::class, 'Register']);
-Route::post('/login', [AuthController::class, 'Login']);
+Route::post('/login', [AuthController::class, 'Login'])->middleware('throttle:login');
 
 
 Route::middleware( ['auth:api' ])->group(function () {
+    Route::post('/analyze-image', [ImageAnalysisController::class, 'upload'])
+        ->middleware('throttle:analyze-image');
     Route::post('/register_business', [BusinessController::class, 'createBusiness']);
     Route::middleware( ['BusinessOwner'])->group(function () {
         
@@ -38,6 +44,7 @@ Route::middleware( ['auth:api' ])->group(function () {
         Route::post('/business/update_location', [LocationController::class, 'updateBusinessLocation']);
         Route::post('/business/add_dispenser', [DispenserController::class, 'AddDispenser']);
         Route::post('/business/update_dispenser', [DispenserController::class, 'UpdateDispenser']);
+        Route::post('/business/update_dispenser/active', [DispenserController::class, 'setDispenserActive']);
         Route::post('/business/update_dispenser/setting', [DispenserController::class, 'updateDispenserSaleSettings']);
         Route::post('/business/location/set_price', [PriceController::class, 'setLocationPrice']);
         Route::post('/business/location/change_manager', [LocationController::class, 'changeManager']);
@@ -67,10 +74,15 @@ Route::middleware( ['auth:api' ])->group(function () {
        
 
         Route::post('/business/supply/get_business_supplies', [SupplyController::class, 'getSupplies']);
+        Route::post('/business/supply/get_supply_details', [SupplyController::class, 'getSupplyDetails']);
         Route::post('/business/supply/confirm_business_supply', [SupplyController::class, 'confirmSupply']);
+        Route::post('/business/supply/close_business_supply', [SupplyController::class, 'closeSupply']);
+        Route::post('/business/supply/transfer_business_supply', [SupplyController::class, 'transferSupply']);
 
         Route::post('/business/sales/upload_reciept', [SalesController::class, 'uploadReciept']);
         Route::post('/business/sales/get_reciept', [SalesController::class, 'getSalesReceipts']);
+        Route::post('/business/sales/edit_sale_date', [SalesController::class, 'editSaleDate']);
+        Route::post('/business/sales/reverse_latest_sale', [SalesController::class, 'reverseLatestSale']);
         
         Route::post('/get_business/location/dispenser', [DispenserController::class, 'getLocationDispensers']);
         
@@ -88,7 +100,8 @@ Route::middleware( ['auth:api' ])->group(function () {
     Route::post('/get_business/get_sales_between', [SalesController::class, 'getSalesBetween']);
     Route::post('/get_business/get_sales_data', [SalesController::class, 'getSalesBreakdown']);
     Route::post('/get_business/get_month_sales_data', [SalesController::class, 'getMonthSales']);
-    
+    Route::post('/get_business/sales_by_group' , [SalesController::class , 'getSalesGroupedByWeeks']);
+
     Route::get('/get_business/settings/{withBusiness?}', [SettingsController::class, 'getGeneralSettings']);
 
     Route::post('/business/settings/add_setting', [SettingsController::class, 'addSeting']);

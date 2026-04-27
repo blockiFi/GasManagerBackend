@@ -34,6 +34,7 @@ class AuthController extends Controller
       $user->email = $request->email;
       $user->password = bcrypt($request->password);
        $user->save();
+       $user->sendEmailVerificationNotification();
        $response['code'] = 200;
        $response['message'] = "User Registered Sucessfully!!!";
         return response()->json($response ,200); 
@@ -52,7 +53,7 @@ class AuthController extends Controller
         }
         if(Auth::attempt(['email' => $request->email, 'password' => $request->password])){
             $user = Auth::user();
-            $res['token'] = $user->createToken(name : 'gasManager')->accessToken;
+            $res['token'] = $user->createToken('gasManager')->accessToken;
             $res['user'] = $user;
             
             $usersBusiness  = Business_User::where('user_id' , '=' , $user->id)->first();

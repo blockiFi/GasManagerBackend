@@ -25,8 +25,19 @@ class OperationCostController extends Controller
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
-      } 
-      $locations = Location::where("business_id" , "=" , $request->business_id)->get();
+      }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
+      $locationsQuery = Location::where('business_id', '=', $request->business_id);
+      $restrictedIds = $this->businessAuth()->userAccessibleLocationIds(Auth::user(), $request->business_id);
+      if ($restrictedIds !== null) {
+          $locations = $restrictedIds === []
+              ? collect()
+              : $locationsQuery->whereIn('id', $restrictedIds)->get();
+      } else {
+          $locations = $locationsQuery->get();
+      }
       foreach($locations as $key => $location){
         $TotalOperationalCost = Operation_Cost::where("location_id" , "=" , $location->id)->get();
         $total = 0;
@@ -60,6 +71,9 @@ class OperationCostController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
         if($range == 'current_month') {
             $operationCost = Operation_Cost::where([['business_id' ,'=' , $request->business_id ] , [ 'location_id' , '=' , $request->location_id]])->whereBetween('created_at',[Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()])->orderBy('created_at', 'desc')->get();
         }
@@ -97,6 +111,9 @@ class OperationCostController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
 
       $oprationalCost = new Operation_Cost;
       $oprationalCost->business_id = $request->business_id;

@@ -10,169 +10,191 @@ use App\Models\Location;
 use App\Models\Business_User;
 use App\Models\Price;
 
-
-class LocationController extends Controller 
+class LocationController extends Controller
 {
-
-
-
-
-
-
-    public function getBusinessLocations(Request $request , $withDispenser = '' ){
-        $validator = Validator::make($request->all(), [
-            "business_id" => "required|exists:businesses,id"
-      ]);
-
-      if ($validator->fails()) {
-
-           
-            $response['code'] = 400;
-            $response['errors'] = $validator->messages()->all();
-            return response()->json($response ,400);
-      }
-         $business = Business::find($request->business_id);
-
-         if($withDispenser == 'price'){
-          $locations = Location::where('business_id' ,'=' , $request->business_id)->get();
-          foreach($locations as $key => $location){
-            // $location 'location_id', '=' , $location->id
-            $price = Price::where([['location_id', '=' , $location->id ] , ['active' , '=' , 'true']])->first();
-            if($price){
-              $locations[$key]['active_price'] = $price->price;
-            }else{
-              $locations[$key]['active_price'] = 0;
-            }
-            
-          }
-          $business['locations'] = $locations;
-          $response['data']  = $business;
-        
-          
-           return response()->json($response ,200); 
-         }
-         if(Auth::user()->id == $business->owner_id){
-          $business['locations'] =  Location::where('business_id' , '=' ,$business->id)->with(['Manager' , 'Dispensers'])->get();
-          $response['data'] = $business;
-         }
-        else{
-          $business['locations'] = Location::where('manager_id' ,'=' , Auth::user()->id)->with(['Manager' , 'Dispensers'])->get();
-          $response['data']  = $business;
-        }
-          
-           return response()->json($response ,200); 
-    }
-    public function getBusinessLocationsWithPrice(Request $request  ){
-      $validator = Validator::make($request->all(), [
-          "business_id" => "required|exists:businesses,id"
-    ]);
-
-    if ($validator->fails()) {
-
-         
-          $response['code'] = 400;
-          $response['errors'] = $validator->messages()->all();
-          return response()->json($response ,400);
-    }
-      return  $business = Business::find($request->business_id);
-      
-      
-       
-  }
-    public function addBusinessLocation(Request $request){
+    public function getBusinessLocations(Request $request, $withDispenser = '')
+    {
         $validator = Validator::make($request->all(), [
             'business_id' => 'required|exists:businesses,id',
-            "name" =>  "required",
-            'address' => 'required',
-            'user_id' => 'required|exists:users,id'
-      ]);
+        ]);
 
-      if ($validator->fails()) {
-
-           
+        if ($validator->fails()) {
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
-            return response()->json($response ,400);
-      }
 
-      
-      $isWithTheBusiness = Business_User::where([['business_id' , '=' , $request->business_id],['user_id' , '=' , $request->user_id]])->first();
-      if($isWithTheBusiness){
-        $location = new Location;
+            return response()->json($response, 400);
+        }
+
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
+
+        $business = Business::find($request->business_id);
+
+        if ($withDispenser == 'price') {
+            $locations = Location::where('business_id', '=', $request->business_id)->get();
+            foreach ($locations as $key => $location) {
+                $price = Price::where([['location_id', '=', $location->id], ['active', '=', 'true']])->first();
+                if ($price) {
+                    $locations[$key]['active_price'] = $price->price;
+                } else {
+                    $locations[$key]['active_price'] = 0;
+                }
+            }
+            $business['locations'] = $locations;
+            $response['data'] = $business;
+
+            return response()->json($response, 200);
+        }
+        if (Auth::user()->id == $business->owner_id) {
+            $business['locations'] = Location::where('business_id', '=', $business->id)->with(['Manager', 'Dispensers'])->get();
+            $response['data'] = $business;
+        } else {
+            $business['locations'] = Location::where('business_id', '=', $business->id)
+                ->where('manager_id', '=', Auth::user()->id)
+                ->with(['Manager', 'Dispensers'])
+                ->get();
+            $response['data'] = $business;
+        }
+
+        return response()->json($response, 200);
+    }
+
+    public function getBusinessLocationsWithPrice(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'business_id' => 'required|exists:businesses,id',
+        ]);
+
+        if ($validator->fails()) {
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+
+            return response()->json($response, 400);
+        }
+
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
+
+        $business = Business::find($request->business_id);
+        $locations = Location::where('business_id', '=', $request->business_id)->get();
+        foreach ($locations as $key => $location) {
+            $price = Price::where([['location_id', '=', $location->id], ['active', '=', 'true']])->first();
+            if ($price) {
+                $locations[$key]['active_price'] = $price->price;
+            } else {
+                $locations[$key]['active_price'] = 0;
+            }
+        }
+        $business['locations'] = $locations;
+
+        return response()->json(['data' => $business], 200);
+    }
+
+    public function addBusinessLocation(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'business_id' => 'required|exists:businesses,id',
+            'name' => 'required',
+            'address' => 'required',
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+
+            return response()->json($response, 400);
+        }
+
+        $isWithTheBusiness = Business_User::where([['business_id', '=', $request->business_id], ['user_id', '=', $request->user_id]])->first();
+        if ($isWithTheBusiness) {
+            $location = new Location;
+            $location->name = $request->name;
+            $location->address = $request->address;
+            $location->business_id = $request->business_id;
+            $location->manager_id = $request->user_id;
+
+            $location->save();
+
+            $response['data'] = $this->getLocations($request->business_id);
+            $response['message'] = 'Location Added Successfully';
+
+            return response()->json($response, 200);
+        } else {
+            $response['code'] = 400;
+            $response['errors'] = ['selected user not with the Business'];
+
+            return response()->json($response, 400);
+        }
+    }
+
+    public function updateBusinessLocation(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'business_id' => 'required|exists:businesses,id',
+            'id' => 'required|exists:locations',
+            'name' => 'required',
+            'address' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            $response['code'] = 400;
+            $response['errors'] = $validator->messages()->all();
+
+            return response()->json($response, 400);
+        }
+
+        $location = Location::find($request->id);
+        if (! $location || (string) $location->business_id !== (string) $request->business_id) {
+            return response()->json(['code' => 400, 'errors' => ['Location not found for this business.']], 400);
+        }
+
         $location->name = $request->name;
         $location->address = $request->address;
-        $location->business_id = $request->business_id;
-        $location->manager_id = $request->user_id;
-
         $location->save();
-        
-        $response['data'] = $this->getLocations($request->business_id);
-        $response['message'] = "Location Added Successfully";
-        return response()->json($response ,200); 
-      }
-      else{
-        $response['code'] = 400;
-        $response['errors'] =["selected user not with the Business"];
-        return response()->json($response ,400);
-      }
-      
-     
+        $response['data'] = $location;
+        $response['message'] = 'Location Updates Successfully';
+
+        return response()->json($response, 200);
     }
-    public function updateBusinessLocation(Request $request){
+
+    public function changeManager(Request $request)
+    {
         $validator = Validator::make($request->all(), [
-            "business_id" => "required|exists:businesses,id",
-            "id" => "required|exists:locations",
-            "name" =>  "required",
-            'address' => 'required',
-      ]);
+            'business_id' => 'required|exists:businesses,id',
+            'location_id' => 'required|exists:locations,id',
+            'user_id' => 'required|exists:users,id',
+        ]);
 
-      if ($validator->fails()) {
-
-           
+        if ($validator->fails()) {
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
-            return response()->json($response ,400);
-      }
 
-      $location = Location::find($request->id);
-      $location->name = $request->name;
-      $location->address = $request->address;
-      $location->save();
-      $response['data'] = $location;
-        $response['message'] = "Location Updates Successfully";
-        return response()->json($response ,200); 
+            return response()->json($response, 400);
+        }
+        $usersBusiness = Business_User::where([['user_id', '=', $request->user_id], ['business_id', '=', $request->business_id]])->get();
+        if (count($usersBusiness) > 0) {
+            $location = Location::find($request->location_id);
+            if (! $location || (string) $location->business_id !== (string) $request->business_id) {
+                return response()->json(['code' => 400, 'errors' => ['Location not found for this business.']], 400);
+            }
+            $location->manager_id = $request->user_id;
+            $location->save();
+            $response['message'] = 'Manager Changed Successfully';
 
-    }
-    public function changeManager(Request $request){
-      $validator = Validator::make($request->all(), [
-        "business_id" => "required|exists:businesses,id",
-        "location_id" => "required|exists:locations,id",
-        "user_id" =>  "required|exists:users,id"
-  ]);
+            return response()->json($response, 200);
+        }
+        $response['errors'] = ['User does not belong to this business'];
 
-  if ($validator->fails()) {
-
-       
-        $response['code'] = 400;
-        $response['errors'] = $validator->messages()->all();
-        return response()->json($response ,400);
-  }
-  $usersBusiness = Business_User::where([['user_id' , '=' , $request->user_id] , ['business_id' , '=' , $request->business_id]])->get();
-  if(count($usersBusiness) > 0){
-    $location = Location::find($request->location_id);
-    $location->manager_id = $request->user_id;
-    $location->save();
-    $response['message'] = "Manager Changed Successfully";
-    return response()->json($response ,200); 
-  }
-  $response['errors'] = ["User does not belong to this business"];
-  return response()->json($response ,400); 
-  
-    }
-    public function getLocations($business_id){
-         $business = business::where('id' , $business_id)->with(['Locations' , 'Locations.Manager'])->first();
-      
-       return $business;
+        return response()->json($response, 400);
     }
 
+    public function getLocations($business_id)
+    {
+        $business = Business::where('id', $business_id)->with(['Locations', 'Locations.Manager'])->first();
+
+        return $business;
+    }
 }

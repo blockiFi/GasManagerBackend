@@ -24,6 +24,9 @@ class PriceController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
 
       $price = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['active' , '=' , 'true']])->first();
       if($price){
@@ -46,6 +49,9 @@ class PriceController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
       $prices = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] ])->get();
       $response['data'] = $prices;
       return response()->json($response ,200); 
@@ -63,7 +69,10 @@ class PriceController extends Controller
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
-      } 
+      }
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
       $prices = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['active' , '=' , 'true']])->get();
       foreach($prices as $price){
         $price->active = 'false';

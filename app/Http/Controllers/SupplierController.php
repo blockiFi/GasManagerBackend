@@ -23,7 +23,10 @@ class SupplierController extends Controller
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
-      } 
+      }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
 
       $suppliers = Supplier::where('business_id' , '=' , $request->business_id)->get();
       $response['data'] = $suppliers;
@@ -48,7 +51,10 @@ class SupplierController extends Controller
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
-      } 
+      }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
 
       $supplier = new Supplier;
       $supplier->business_id = $request->business_id;
@@ -83,7 +89,10 @@ class SupplierController extends Controller
             $response['code'] = 400;
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
-      } 
+      }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
       $supplier = Supplier::find($request->supplier_id);
       if($supplier->business_id != $request->business_id){
         $response['errors'] = ['supplier does not belong to this business'];

@@ -22,6 +22,9 @@ class BusinessUserController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
       
       $businessUsers = Business_User::where("business_id" , "="  , $request->business_id)->with("user")->orderBy('created_at' , 'desc')->get();
       $response['data'] = $businessUsers;
@@ -43,6 +46,9 @@ class BusinessUserController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
       
       $user = new User;
       $recoverykey = Str::random(40);
@@ -76,6 +82,9 @@ class BusinessUserController extends Controller
             $response['errors'] = $validator->messages()->all();
             return response()->json($response ,400);
       }
+        if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
+            return $denied;
+        }
       
       $BusinessUser = Business_User::where('user_id' , '=' , $request->user_id)->first();
       if($BusinessUser){
