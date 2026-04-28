@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Business;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Passport\Passport;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class TenantAuthorizationTest extends TestCase
@@ -35,7 +35,7 @@ class TenantAuthorizationTest extends TestCase
         $businessB->is_active = true;
         $businessB->save();
 
-        Passport::actingAs($ownerA);
+        Sanctum::actingAs($ownerA);
 
         $this->postJson('/api/get_business/get_sales_data', [
             'business_id' => $businessB->id,
@@ -52,7 +52,7 @@ class TenantAuthorizationTest extends TestCase
         $business->is_active = true;
         $business->save();
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $this->postJson('/api/get_business/get_sales_data', [
             'business_id' => $business->id,

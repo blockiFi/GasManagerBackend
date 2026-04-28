@@ -11,7 +11,7 @@ use App\Models\Supply;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
-use Laravel\Passport\Passport;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ReverseLatestSaleTest extends TestCase
@@ -94,7 +94,7 @@ class ReverseLatestSaleTest extends TestCase
         $receipt->save();
         Storage::disk('public')->put('receipts/test.jpg', 'x');
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $response = $this->postJson('/api/business/sales/reverse_latest_sale', [
             'business_id' => (string) $business->id,
@@ -141,7 +141,7 @@ class ReverseLatestSaleTest extends TestCase
         $sale->uploaded_by = (string) $owner->id;
         $sale->save();
 
-        Passport::actingAs($stranger);
+        Sanctum::actingAs($stranger);
 
         $this->postJson('/api/business/sales/reverse_latest_sale', [
             'business_id' => (string) $business->id,
@@ -157,7 +157,7 @@ class ReverseLatestSaleTest extends TestCase
         $owner = User::factory()->create();
         [$business, $location, $dispenser] = $this->seedOwnerBusinessLocationDispenserSupplyPrice($owner);
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $this->postJson('/api/business/sales/reverse_latest_sale', [
             'business_id' => (string) $business->id,
@@ -212,7 +212,7 @@ class ReverseLatestSaleTest extends TestCase
         $latest->uploaded_by = (string) $owner->id;
         $latest->save();
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $this->postJson('/api/business/sales/reverse_latest_sale', [
             'business_id' => (string) $business->id,

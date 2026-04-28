@@ -18,7 +18,7 @@ use App\Http\Controllers\WhatsAppController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
-})->middleware('auth:api');
+})->middleware('auth:sanctum');
 
 // WhatsApp Webhook Routes (no authentication required)
 Route::get('/whatsapp/webhook', [WhatsAppController::class, 'verifyWebhook']);
@@ -32,7 +32,7 @@ Route::post('/register', [AuthController::class, 'Register']);
 Route::post('/login', [AuthController::class, 'Login'])->middleware('throttle:login');
 
 
-Route::middleware( ['auth:api' ])->group(function () {
+Route::middleware( ['auth:sanctum' ])->group(function () {
     Route::post('/analyze-image', [ImageAnalysisController::class, 'upload'])
         ->middleware('throttle:analyze-image');
     Route::post('/register_business', [BusinessController::class, 'createBusiness']);

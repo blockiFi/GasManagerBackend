@@ -8,7 +8,7 @@ use App\Models\Location;
 use App\Models\Supply;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Passport\Passport;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class CloseSupplyTest extends TestCase
@@ -68,7 +68,7 @@ class CloseSupplyTest extends TestCase
         $owner = User::factory()->create();
         [$business, $location, $dispenser, $supply] = $this->seedDeliveredOpenSupply($owner);
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $response = $this->postJson('/api/business/supply/close_business_supply', [
             'business_id' => (string) $business->id,
@@ -99,7 +99,7 @@ class CloseSupplyTest extends TestCase
         $supply->excess_kg = 5;
         $supply->save();
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $this->postJson('/api/business/supply/close_business_supply', [
             'business_id' => (string) $business->id,
@@ -126,7 +126,7 @@ class CloseSupplyTest extends TestCase
         $supply->available_quantity = 25;
         $supply->save();
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $this->postJson('/api/business/supply/close_business_supply', [
             'business_id' => (string) $business->id,
@@ -146,7 +146,7 @@ class CloseSupplyTest extends TestCase
         $supply->supplied = false;
         $supply->save();
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $this->postJson('/api/business/supply/close_business_supply', [
             'business_id' => (string) $business->id,
@@ -163,7 +163,7 @@ class CloseSupplyTest extends TestCase
         $supply->sold = 1;
         $supply->save();
 
-        Passport::actingAs($owner);
+        Sanctum::actingAs($owner);
 
         $this->postJson('/api/business/supply/close_business_supply', [
             'business_id' => (string) $business->id,

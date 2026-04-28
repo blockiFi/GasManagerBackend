@@ -53,7 +53,7 @@ class AuthController extends Controller
         }
         if(Auth::attempt(['email' => $request->email, 'password' => $request->password])){
             $user = Auth::user();
-            $res['token'] = $user->createToken('gasManager')->accessToken;
+            $res['token'] = $user->createToken('gasManager')->plainTextToken;
             $res['user'] = $user;
             
             $usersBusiness  = Business_User::where('user_id' , '=' , $user->id)->first();
