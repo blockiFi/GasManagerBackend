@@ -102,8 +102,7 @@ class SalesGroupedAnalyticsService
                 }
                 $totalSalesAmount += $sale->amount;
                 $totalSalesKg += $sale->kg_quantity;
-                $qty = (float) $supply->quantity;
-                $unitCost = $qty > 0 ? ($supply->amount / $qty) : 0;
+                $unitCost = $supply->unitCost();
                 $profit = ($sale->amount) - ($unitCost * $sale->kg_quantity);
                 $totalProfit += $profit;
             }
@@ -112,8 +111,7 @@ class SalesGroupedAnalyticsService
                 foreach ($groupedSupplies[$group] as $supply) {
                     $supplyRows[] = $supply->load('LastSale')->toArray();
                     $totalExcessKg += $supply->excess_kg;
-                    $sq = (float) $supply->quantity;
-                    $ExcessKgProfit += $sq > 0 ? ($supply->amount / $sq * $supply->excess_kg) : 0;
+                    $ExcessKgProfit += $supply->unitCost() * $supply->excess_kg;
                 }
             }
 

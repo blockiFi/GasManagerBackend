@@ -156,7 +156,7 @@ class AddSaleService
             $sale->status = '';
             $sale->save();
 
-            $this->applyDispenserLevelUpdate($dispenser, (float) $sale->kg_quantity);
+            $this->applyDispenserLevelUpdate($dispenser, (float) $sale->kg_quantity, $supply);
             $this->applySupplyUpdates(
                 $supply,
                 $dispenser,
@@ -334,8 +334,12 @@ class AddSaleService
         }
     }
 
-    private function applyDispenserLevelUpdate(Dispenser $dispenser, float $kgQuantity): void
+    private function applyDispenserLevelUpdate(Dispenser $dispenser, float $kgQuantity, Supply $supply): void
     {
+        if ($supply->unlimited) {
+            return;
+        }
+
         $dispenser->prev_level = $dispenser->current_level;
         $current = (float) $dispenser->current_level;
 
@@ -357,8 +361,12 @@ class AddSaleService
         $kgQty = (float) $sale->kg_quantity;
         $saleAmount = (float) $sale->amount;
 
+        if ($supply->unlimited && (int) $supply->sold === 0) {
+            return;
+        }
+
         if ($supply->sold == 1) {
-            $supplyCostPerKg = (float) $supply->amount / max(1.0, (float) $supply->quantity);
+            $supplyCostPerKg = $supply->unitCost();
             $_profit = $saleAmount - ($kgQty * $supplyCostPerKg);
             $supply->profit = (float) ($supply->profit ?? 0) + $_profit;
             $supply->excess_kg = (int) ((float) ($supply->excess_kg ?? 0) + $kgQty);

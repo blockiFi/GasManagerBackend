@@ -105,9 +105,7 @@ class SupplyController extends Controller
         $totalKgSold = 0.0;
         $salesProfit = 0.0;
 
-        $supplyQty = (float) ($supply->quantity ?? 0);
-        $supplyAmount = (float) ($supply->amount ?? 0);
-        $unitCost = $supplyQty > 0 ? ($supplyAmount / $supplyQty) : 0.0;
+        $unitCost = $supply->unitCost();
 
         foreach ($sales as $sale) {
             $kg = (float) ($sale->kg_quantity ?? 0);
@@ -147,15 +145,24 @@ class SupplyController extends Controller
     }
 
     public function addSupply(Request $request){
-        $validator = Validator::make($request->all(), [
+        $isUnlimited = filter_var($request->input('unlimited'), FILTER_VALIDATE_BOOLEAN);
+
+        $rules = [
             'business_id' => 'required|exists:businesses,id',
             'location_id' => 'required|exists:locations,id',
             'dispenser_id' => 'required|exists:dispensers,id',
-            'quantity' => 'required',
-            'amount' => 'required',
             'supplier_id' => 'required',
             'purchased_at' => 'nullable|date',
-        ]);
+        ];
+
+        if ($isUnlimited) {
+            $rules['unit_cost'] = 'required|numeric|min:0';
+        } else {
+            $rules['quantity'] = 'required';
+            $rules['amount'] = 'required';
+        }
+
+        $validator = Validator::make($request->all(), $rules);
     
       if ($validator->fails()) {
     
@@ -172,14 +179,27 @@ class SupplyController extends Controller
       $supply->business_id = $request->business_id;
       $supply->location_id = $request->location_id;
       $supply->dispenser_id = $request->dispenser_id;
-      $supply->quantity = $request->quantity;
-      $supply->available_quantity = $request->quantity;
+      $supply->supplier_id = $request->supplier_id;
       $supply->sold = 0;
       $supply->profit = 0;
-      $supply->amount = $request->amount;
-      $supply->supplier_id = $request->supplier_id;
       $supply->excess_kg = 0;
       $supply->purchased_at = Carbon::parse($request->input('purchased_at', now()));
+
+      if ($isUnlimited) {
+          $supply->unlimited = true;
+          $supply->unit_cost = (string) $request->unit_cost;
+          $supply->quantity = '0';
+          $supply->available_quantity = 0;
+          $supply->amount = '0';
+          $supply->supplied = true;
+          $supply->delivered_at = Carbon::now();
+      } else {
+          $supply->unlimited = false;
+          $supply->quantity = $request->quantity;
+          $supply->available_quantity = $request->quantity;
+          $supply->amount = $request->amount;
+      }
+
       $supply->save();
       $response['message'] = "Supply Added Successfully!!!";
       return response()->json($response ,200);
@@ -270,27 +290,45 @@ class SupplyController extends Controller
             ], 400);
         }
 
-        $remaining = (float) $supply->available_quantity;
+        if ($supply->unlimited) {
+            DB::transaction(function () use ($supply) {
+                $totalKgSold = (float) Sale::query()
+                    ->where('supply_id', '=', $supply->id)
+                    ->sum('kg_quantity');
 
-        DB::transaction(function () use ($supply, $remaining) {
-            $dispenser = Dispenser::find($supply->dispenser_id);
-            if ($dispenser && $remaining > 0) {
-                $dispenser->prev_level = $dispenser->current_level;
-                $level = (float) $dispenser->current_level;
-                if ($remaining > $level) {
-                    $dispenser->current_level = 0;
-                } else {
-                    $dispenser->current_level = $level - $remaining;
+                $unitCost = (float) $supply->unit_cost;
+
+                $supply->quantity = (string) $totalKgSold;
+                $supply->amount = (string) ($totalKgSold * $unitCost);
+                $supply->available_quantity = 0;
+                $supply->prev_quantity = 0;
+                $supply->excess_kg = 0;
+                $supply->sold = 1;
+                $supply->save();
+            });
+        } else {
+            $remaining = (float) $supply->available_quantity;
+
+            DB::transaction(function () use ($supply, $remaining) {
+                $dispenser = Dispenser::find($supply->dispenser_id);
+                if ($dispenser && $remaining > 0) {
+                    $dispenser->prev_level = $dispenser->current_level;
+                    $level = (float) $dispenser->current_level;
+                    if ($remaining > $level) {
+                        $dispenser->current_level = 0;
+                    } else {
+                        $dispenser->current_level = $level - $remaining;
+                    }
+                    $dispenser->save();
                 }
-                $dispenser->save();
-            }
 
-            $supply->excess_kg = (int) round((float) $supply->excess_kg - $remaining);
-            $supply->available_quantity = 0;
-            $supply->prev_quantity = 0;
-            $supply->sold = 1;
-            $supply->save();
-        });
+                $supply->excess_kg = (int) round((float) $supply->excess_kg - $remaining);
+                $supply->available_quantity = 0;
+                $supply->prev_quantity = 0;
+                $supply->sold = 1;
+                $supply->save();
+            });
+        }
 
         $supply->refresh();
 

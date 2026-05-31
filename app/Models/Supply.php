@@ -46,5 +46,17 @@ class Supply extends Model
         return $this->hasOne(Sale::class)->orderBy('sales_date', 'desc');
     }
 
+    public function unitCost(): float
+    {
+        if ($this->unlimited && $this->unit_cost !== null && $this->unit_cost !== '') {
+            return (float) $this->unit_cost;
+        }
 
+        $qty = (float) $this->quantity;
+        if ($qty > 0) {
+            return (float) $this->amount / $qty;
+        }
+
+        return 0.0;
+    }
 }

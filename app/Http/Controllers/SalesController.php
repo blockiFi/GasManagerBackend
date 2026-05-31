@@ -89,7 +89,7 @@ class SalesController extends Controller
         foreach($supply as $key => $sup){
             $excessKg += $sup->excess_kg ;
             $supQty = (float) $sup->quantity;
-            $profit = $supQty > 0 ? $sup->excess_kg * $sup->amount / $supQty : 0;
+            $profit = $supQty > 0 ? $sup->excess_kg * $sup->unitCost() : 0;
             $profitfromExcess = $profitfromExcess + $profit;
         }
         
@@ -184,10 +184,7 @@ public function getProfit($sales = []) {
         foreach($sales as $key => $sale){
         $supply = Supply::find($sale->supply_id);
 
-        $qty = $supply ? (float) $supply->quantity : 0.0;
-        $unitPrice = $supply
-            ? ($qty > 0 ? (float) $supply->amount / $qty : 0.0)
-            : 1.0;
+        $unitPrice = $supply ? $supply->unitCost() : 1.0;
         $cost = $unitPrice * $sale->kg_quantity;
         $totalSales = $totalSales + $sale->amount;
         $totalKg = $totalKg + $sale->kg_quantity;
@@ -264,7 +261,7 @@ public function getProfit($sales = []) {
     $excessPorifit = 0;
     foreach($supply as $sup){
         $excessKg = $excessKg + $sup->excess_kg;
-        $profit = $sup->excess_kg * $sup->amount / $sup->quantity;
+        $profit = $sup->excess_kg * $sup->unitCost();
         $excessPorifit = $excessPorifit + $profit;
     }
 
@@ -357,7 +354,7 @@ foreach($sales as $key => $sale){
     $sales[$key]["supply"] =  $sale->supply;
     
     $sales[$key]["expected_sales_amount"] = $sale->kg_quantity * $sale->Price->price;
-    $priceDif =     ((($unitPrice)) - ($sale->supply['amount'] /$sale->supply['quantity']));
+    $priceDif = $unitPrice - $sale->supply->unitCost();
     $sales[$key]["profit"]  = $priceDif * $sale->kg_quantity;
 
      
@@ -601,9 +598,11 @@ public function editSaleDate(Request $request)
                 $qty = max((float) $supply->quantity, 1.0);
 
                 if ((int) $supply->sold === 0) {
-                    $supply->available_quantity = (int) round((float) $supply->available_quantity + $kg);
-                    $supply->prev_quantity = $supply->available_quantity;
-                    $supply->save();
+                    if (! $supply->unlimited) {
+                        $supply->available_quantity = (int) round((float) $supply->available_quantity + $kg);
+                        $supply->prev_quantity = $supply->available_quantity;
+                        $supply->save();
+                    }
                 } else {
                     $otherKgSum = (float) Sale::query()
                         ->where('supply_id', '=', $supply->id)
@@ -611,7 +610,7 @@ public function editSaleDate(Request $request)
                         ->sum('kg_quantity');
 
                     if ($otherKgSum >= $qty) {
-                        $unitCost = (float) $supply->amount / $qty;
+                        $unitCost = $supply->unitCost();
                         $saleProfit = (float) $sale->amount - ($kg * $unitCost);
                         $supply->excess_kg = max(0, (float) $supply->excess_kg - $kg);
                         $supply->profit = (float) $supply->profit - $saleProfit;
@@ -631,10 +630,12 @@ public function editSaleDate(Request $request)
                     }
                 }
 
-                $restored = (float) $dispenser->prev_level;
-                $dispenser->current_level = $restored;
-                $dispenser->prev_level = $restored;
-                $dispenser->save();
+                if (! $supply->unlimited) {
+                    $restored = (float) $dispenser->prev_level;
+                    $dispenser->current_level = $restored;
+                    $dispenser->prev_level = $restored;
+                    $dispenser->save();
+                }
 
                 $receipts = Sale_Reciept::where('sales_id', '=', (string) $sale->id)->get();
                 foreach ($receipts as $reciept) {
