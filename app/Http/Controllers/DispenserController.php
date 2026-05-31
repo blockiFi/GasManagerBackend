@@ -13,11 +13,10 @@ class DispenserController extends Controller
     //
     public function updateDispenserSaleSettings(Request $request){
         $validator = Validator::make($request->all(), [
-            "business_id" => "required|exists:businesses,id",
-            "location_id" => "required|exists:locations,id",
-            "dispenser_id" =>  "required|exists:dispensers,id",
-            
-      ]);
+            'business_id' => 'required|exists:businesses,id',
+            'location_id' => 'required|exists:locations,id',
+            'dispenser_id' => 'required|exists:dispensers,id',
+        ]);
 
       if ($validator->fails()) {
 
@@ -46,11 +45,11 @@ class DispenserController extends Controller
     }
     public function AddDispenser(Request $request){
         $validator = Validator::make($request->all(), [
-            "business_id" => "required|exists:businesses,id",
-            "location_id" => "required|exists:locations,id",
-            "name" =>  "required",
+            'business_id' => 'required|exists:businesses,id',
+            'location_id' => 'required|exists:locations,id',
+            'name' => 'required',
             'capacity' => 'required',
-      ]);
+        ]);
 
       if ($validator->fails()) {
 
