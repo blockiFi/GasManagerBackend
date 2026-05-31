@@ -13,51 +13,19 @@ use App\Models\Price;
 use Carbon\Carbon;
 use App\Models\Sale_Reciept;
 use App\Models\Supply;
-use App\Models\Setting;
-use App\Models\Business_Setting;
 use App\Models\Dispenser;
+use App\Exceptions\AddSaleValidationFailure;
+use App\Http\Requests\AddSalesRequest;
 use App\Http\Requests\GetSalesGroupedByWeeksRequest;
+use App\Services\AddSaleService;
 use App\Services\SalesGroupedAnalyticsService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class SalesController extends Controller
 {
-    /**
-     * Sale whose closing readings become the next record's opening (meter chain).
-     * Uses calendar sales_date (then id), not insertion order alone, so backdated
-     * and bulk entries still chain to the correct prior reading.
-     */
-    protected function previousSaleForDispenser(
-        string $businessId,
-        string $locationId,
-        string $dispenserId,
-        Carbon $salesDate
-    ): ?Sale {
-        $day = $salesDate->copy()->startOfDay();
-
-        $base = Sale::query()
-            ->where('business_id', '=', $businessId)
-            ->where('location_id', '=', $locationId)
-            ->where('dispenser_id', '=', $dispenserId);
-
-        $sameDay = (clone $base)
-            ->whereDate('sales_date', '=', $day)
-            ->orderByDesc('id')
-            ->first();
-
-        if ($sameDay) {
-            return $sameDay;
-        }
-
-        return (clone $base)
-            ->whereDate('sales_date', '<', $day)
-            ->orderByDesc('sales_date')
-            ->orderByDesc('id')
-            ->first();
-    }
-
     public function getSalesGroupedByWeeks(GetSalesGroupedByWeeksRequest $request)
     {
         $result = app(SalesGroupedAnalyticsService::class)->buildGroupedSales($request);
@@ -240,8 +208,13 @@ public function getProfit($sales = []) {
 
     public function getSalesBreakdown(Request $request) {
     $validator = Validator::make($request->all(), [
-        "business_id" => "required|exists:businesses,id"
-  ]);
+        'business_id' => 'required|exists:businesses,id',
+        'location_id' => [
+            'sometimes',
+            'nullable',
+            Rule::exists('locations', 'id')->where('business_id', $request->input('business_id')),
+        ],
+    ]);
 
   if ($validator->fails()) {
 
@@ -253,7 +226,15 @@ public function getProfit($sales = []) {
     if ($denied = $this->denyUnlessCanAccessBusiness($request)) {
         return $denied;
     }
+    if ($request->filled('location_id')) {
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
+        }
+    }
     $locationsQuery = Location::where('business_id', '=', $request->business_id);
+    if ($request->filled('location_id')) {
+        $locationsQuery->where('id', '=', $request->location_id);
+    }
     $restrictedIds = $this->businessAuth()->userAccessibleLocationIds(Auth::user(), $request->business_id);
     if ($restrictedIds !== null) {
         if ($restrictedIds === []) {
@@ -390,260 +371,26 @@ $response['location'] =$location;
 return response()->json($response ,200);
 }
 
-public function addSales(Request $request){
-    $validator = Validator::make($request->all(), [
-        "business_id" => "required|exists:businesses,id",
-        "location_id" => "required|exists:locations,id",
-        "dispenser_id" => "required|exists:dispensers,id",
-        "opening_sales" => "required|numeric",
-        "closing_sales" => "required|numeric",
-        "opening_kg" => "required|numeric",
-        "closing_kg" => "required|numeric",
-        "sales_date" => "required|date"
-
-
-  ]);
-
-  if ($validator->fails()) {
-
-       
-        $response['code'] = 400;
-        $response['errors'] = $validator->messages()->all();
-        return response()->json($response ,400);
-  }
-    if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
-        return $denied;
-    }
- $supply  = Supply::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ], ['sold' ,'=' , '0' ]])->first();
-  if($supply){
-
-  }else{
-    $supply  = Supply::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ]])->latest()->first();
-  
-  }
-   $salesDate = Carbon::parse($request->sales_date);
-    $prevSales = $this->previousSaleForDispenser(
-       (string) $request->business_id,
-       (string) $request->location_id,
-       (string) $request->dispenser_id,
-       $salesDate
-   );
-   $price = Price::where([['business_id' ,'=' , $request->business_id] , ['location_id' , '=' , $request->location_id] , ['active' , '=' , 'true']])->first();
-  if(!$price){
-    $response['code'] = 400;
-    $response['errors'] = ["No Price Available Please set sale Price"];
-    return response()->json($response ,400);    
-    }
-   if($prevSales){
-
-  $response =  $this->ValidateSales($request , $prevSales , $price);
-    if($response['code'] == 400){
-        return response()->json($response ,400);
-    }
-    
-    $sales = new Sale;
-    $sales->business_id = $request->business_id;
-    $sales->location_id = $request->location_id;
-    $sales->dispenser_id = $request->dispenser_id;
-    $sales->opening_sales = $prevSales->closing_sales;
-    $sales->closing_sales = $request->closing_sales;
-    $sales->opening_kg = $prevSales->closing_kg;
-    $sales->closing_kg = $request->closing_kg;
-
-    if((float)$request->closing_sales >= (float)$prevSales->closing_sales){
-        $sales->amount = (float)$request->closing_sales - (float)$prevSales->closing_sales;
-    }else{
-        $sales->amount = (1000000 + (float)$request->closing_sales) - (float)$prevSales->closing_sales;
-    }
-
-    $sales->kg_quantity = (float)$request->closing_kg - (float)$prevSales->closing_kg;
-    $sales->sales_date = $salesDate;
-    $sales->uploaded_by = Auth::user()->id;
-    $sales->price_id  = $price->id;
-    $sales->supply_id = $supply->id;
-    $sales->save();
-  }else{
-    $prevSales = new Sale;
-    $prevSales->business_id = $request->business_id;
-    $prevSales->location_id = $request->location_id;
-    $prevSales->dispenser_id = $request->dispenser_id;
-    $prevSales->opening_sales = 0;
-    $prevSales->closing_sales = $request->opening_sales;
-    $prevSales->opening_kg = 0;
-    $prevSales->closing_kg = $request->opening_kg;;
-
-    
-
-    $response =  $this->ValidateSales($request , $prevSales , $price);
-    if($response['code'] == 400){
-        return response()->json($response ,400);
-    }
-    
-    $sales = new Sale;
-    $sales->business_id = $request->business_id;
-    $sales->location_id = $request->location_id;
-    $sales->dispenser_id = $request->dispenser_id;
-    $sales->opening_sales = $request->opening_sales;
-    $sales->closing_sales = $request->closing_sales;
-    $sales->opening_kg = $request->opening_kg;
-    $sales->closing_kg = $request->closing_kg;
-
-    if((float)$request->closing_sales > (float)$request->opening_sales){
-        $sales->amount = (float)$request->closing_sales - (float)$request->opening_sales;
-    }else{
-        $sales->amount = (10000000 + (float)$request->closing_sales) - (float)$request->opening_sales;
-    }
-    
-    $sales->kg_quantity = (float)$request->closing_kg - (float)$request->opening_kg;;
-    $sales->sales_date = $salesDate;
-    $sales->uploaded_by = Auth::user()->id;
-    $sales->price_id  = $price->id;
-    $sales->supply_id = $supply->id;
-    $sales->save();
-  
-  }
-  $dispenser = Dispenser::find($request->dispenser_id);
-   $dispenser->prev_level = $dispenser->current_level;
-  if($sales->kg_quantity > $dispenser->current_level){
-    $dispenser->current_level = 0;
-
-  }else{
-   
-    $dispenser->current_level = $dispenser->current_level -  $sales->kg_quantity;
-    
-  }
-
-if($supply->sold == 1){
-
-      $_profit =$sales->amount - ($sales->kg_quantity * $supply->amount / $supply->quantity); 
-      $supply->profit = $supply->profit + $_profit;
-      $supply->excess_kg =  $supply->excess_kg + $sales->kg_quantity;
-     $supply->save();
-}
-else{
-    
-    if($sales->kg_quantity > $supply->available_quantity){
-        $remainingKg = $sales->kg_quantity -  $supply->available_quantity;
-        
-                if($dispenser->empty_sale == 'true'){
-                    $supply->available_quantity  = 0;
-                    $supply->sold = 1;
-                    $sales = Sale::where('supply_id' , '=' , $supply->id)->get();
-                    $totalSales = 0;
-                    foreach($sales as $sale){
-                        $totalSales = $totalSales + $sale->amount;
-                  
-                    }
-                  $supply->profit =   $totalSales - $supply->amount;
-                  $supply->excess_kg =   $remainingKg;
-                  $supply->save();
-    
-                }
-    
-                else{
-                    $supply->prev_quantity  = $supply->available_quantity ;
-                    $supply->available_quantity  = 0;
-                    $supply->sold = 1;
-                    $supply->save();
-                    $newSupply  = Supply::where([['business_id' ,'=' , $request->business_id ] ,['location_id' ,'=' , $request->location_id ] ,['dispenser_id' ,'=' , $request->dispenser_id ], ['sold' ,'=' , '0' ]])->first();
-                    if($newSupply){
-                    $newSupply->available_quantity = $newSupply->available_quantity - $remainingKg;
-                     $newSupply->save();
-                    }
-                }
-            
-        
-    
-      }else{
-        $supply->prev_quantity  = $supply->available_quantity ;
-        $supply->available_quantity = $supply->available_quantity -  $sales->kg_quantity;
-        $supply->save();
-        
-      }
-}
-//   $sales->supply_id = $supply->id;
-  
-  $dispenser->save();
-  $response['message'] = "Sales Added Successfully!!!";
-return response()->json($response ,200);
-}
-public function ValidateSales($request , $prevSales , $price){
-    $saleskg = $request->closing_kg - $prevSales->closing_kg;
-
-    if((float)$request->closing_sales >= (float)$prevSales->closing_sales){
-        $salesamount = (float)$request->closing_sales - (float)$prevSales->closing_sales;
-    }else{
-        $salesamount = (1000000 + (float)$request->closing_sales) - (float)$prevSales->closing_sales;
-    }
-    if($saleskg < 0){
-        $response['code'] = 400;
-        $response['errors'] = ["Sales Kg is negative, meaning the data uplaoded is not valid"];
-        return $response;
-    }
-    if($salesamount < 0){
-        $response['code'] = 400;
-        $response['errors'] = ["Sales Kg is negative, meaning the data uplaoded is not valid"];
-        return $response;
-    }
-    if($saleskg == 0){
-        $response['code'] = 400;
-        $response['errors'] = ["Sales Kg is 0, meaning no sales made"];
-        return $response;
-    }
-    if($salesamount == 0){
-        $response['code'] = 400;
-        $response['errors'] = ["Sales Amount is 0,  meaning no sales made"];
-        return $response;
-    }
-    $salesPrice =  $salesamount / $saleskg;
-   
-    $PriceThresholdSetting = Setting::where('name' , 'sales_price_threshold')->first();
-    $priceThreshold =  $PriceThresholdSetting->default;
-     $businessSetting = Business_Setting::where([['business_id' , '=' , $request->business_id] , ['setting_id' , '=' , $PriceThresholdSetting->id ]])->first();
-  
-    if($businessSetting){
-        $priceThreshold = $businessSetting->value;
-    }
-    if($salesPrice !=  $price->price){
-        $priceDifference = abs($salesPrice - $price->price);
-        if($salesPrice > $price->price && $priceDifference > $priceThreshold){
-            $response['code'] = 400;
-            $response['errors'] = [
-                "Sales Price is higher than the current price",
-                "$price->price is the current price",
-                " $salesPrice is the sales price",
-                " $priceDifference is the difference",
-                "$priceThreshold  is the price threshold"
-            ];
-           
+    public function addSales(AddSalesRequest $request)
+    {
+        if ($denied = $this->denyUnlessCanAccessBusinessAndLocation($request)) {
+            return $denied;
         }
-        else if($salesPrice < $price->price && $price->price - $salesPrice > $priceThreshold){
-            $priceDifference = abs($salesPrice - $price->price);
-            $response['code'] = 400;
-            $response['errors'] = ["Sales Price is lower than the current price",
-            "$price->price is the current price",
-            " $salesPrice is the sales price",
-            " $priceThreshold  is the price threshold",
-            " $priceDifference is the difference"];
-            
-            
-        }
-        else {
-            $response['code'] = 200;
-            $response['message'] = "Sales Price is Valid";
-        }
-        
-        
-           
-    }
-    else{
-        $response['code'] = 200;
-        $response['message'] = "Sales Price is Valid";
-    }
 
-    return $response;
+        try {
+            app(AddSaleService::class)->add(array_merge(
+                $request->validated(),
+                ['user_id' => Auth::user()->id]
+            ));
+        } catch (AddSaleValidationFailure $e) {
+            return response()->json([
+                'code' => $e->status,
+                'errors' => $e->errors,
+            ], $e->status);
+        }
 
-}
+        return response()->json(['message' => 'Sales Added Successfully!!!'], 200);
+    }
 public function  uploadReciept(Request $request){
     $validator = Validator::make($request->all(), [
         "business_id" => "required|exists:businesses,id",

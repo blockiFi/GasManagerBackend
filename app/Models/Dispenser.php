@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Dispenser extends Model
 {
     use HasFactory;
-    
+
     public function Business(): BelongsTo 
     {
         return $this->belongsTo(Business::class);
